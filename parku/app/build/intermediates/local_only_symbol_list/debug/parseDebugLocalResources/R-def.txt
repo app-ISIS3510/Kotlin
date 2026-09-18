@@ -1,0 +1,20 @@
+R_DEF: Internal format may change without notice
+local
+color background
+color dark_text
+color grey_text
+color light_purple
+color primary
+drawable ic_arrow
+drawable ic_car
+drawable ic_clock
+drawable ic_heart
+drawable ic_heart1
+drawable ic_map
+drawable ic_parking
+drawable ic_user
+drawable map
+font inter
+mipmap ic_launcher
+string app_name
+style Theme.ParkU

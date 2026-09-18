@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#FFF8F7FC</color>
+    <color name="dark_text">#FF231B3D</color>
+    <color name="grey_text">#FF706981</color>
+    <color name="light_purple">#FFEEE9FF</color>
+    <color name="primary">#FF5936E9</color>
+    <string name="app_name">ParkU</string>
+    <style name="Theme.ParkU" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+    </style>
+</resources>
