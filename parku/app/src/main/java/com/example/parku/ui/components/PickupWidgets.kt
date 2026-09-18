@@ -33,6 +33,8 @@ fun ScreenHeader(
     title: String,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    /** Accion opcional a la derecha del titulo (p. ej. el corazon del detalle). */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -62,6 +64,11 @@ fun ScreenHeader(
             fontWeight = FontWeight.W700,
             color = AppColors.darkText,
         )
+
+        if (trailing != null) {
+            Spacer(Modifier.width(12.dp))
+            trailing()
+        }
     }
 }
 

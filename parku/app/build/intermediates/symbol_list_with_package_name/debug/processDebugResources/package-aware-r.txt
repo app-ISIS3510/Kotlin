@@ -52,6 +52,7 @@ dimen notification_small_icon_size_as_large
 dimen notification_subtext_size
 dimen notification_top_pad
 dimen notification_top_pad_large_text
+drawable cityu
 drawable ic_arrow
 drawable ic_call_answer
 drawable ic_call_answer_low
@@ -63,6 +64,7 @@ drawable ic_car
 drawable ic_clock
 drawable ic_heart
 drawable ic_heart1
+drawable ic_heart_filled
 drawable ic_map
 drawable ic_parking
 drawable ic_user

@@ -5,11 +5,13 @@ color dark_text
 color grey_text
 color light_purple
 color primary
+drawable cityu
 drawable ic_arrow
 drawable ic_car
 drawable ic_clock
 drawable ic_heart
 drawable ic_heart1
+drawable ic_heart_filled
 drawable ic_map
 drawable ic_parking
 drawable ic_user

@@ -29,45 +29,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.ParkingCard
+import com.example.parku.ui.data.ParkingLot
+import com.example.parku.ui.data.parkingLots
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
-
-/** Equivale al Map<String, String> que usa la version en Flutter. */
-data class ParkingLot(
-    val name: String,
-    val address: String,
-    val type: String,
-)
 
 @Composable
 fun ParkingListScreen(
     currentIndex: Int,
     onNavTap: (Int) -> Unit,
     onSelectParking: ((ParkingLot) -> Unit)? = null,
+    onOpenSearch: () -> Unit = {},
 ) {
-    val parkingLots = listOf(
-        ParkingLot(
-            name = "City U Parking",
-            address = "Calle 20 · Las Aguas, Bogotá",
-            type = "Cars and motorcycles · Indoor",
-        ),
-        ParkingLot(
-            name = "MetroPark Center",
-            address = "45 Market St",
-            type = "Indoor",
-        ),
-        ParkingLot(
-            name = "University Lot C",
-            address = "102 Campus Drive",
-            type = "Outdoor",
-        ),
-        ParkingLot(
-            name = "Library Underground",
-            address = "250 Civic Center",
-            type = "Indoor",
-        ),
-    )
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -93,9 +66,7 @@ fun ParkingListScreen(
                 .height(58.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(AppColors.white)
-                .clickable {
-                    // Luego conectamos esto con SearchScreen
-                }
+                .clickable { onOpenSearch() }
                 .padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

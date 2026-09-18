@@ -32,6 +32,7 @@ private fun iconRes(name: String): Int = when (name) {
     "car" -> R.drawable.ic_car
     "clock" -> R.drawable.ic_clock
     "heart" -> R.drawable.ic_heart
+    "heart_filled" -> R.drawable.ic_heart_filled
     "heart1" -> R.drawable.ic_heart1
     "map" -> R.drawable.ic_map
     "parking" -> R.drawable.ic_parking
