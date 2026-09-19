@@ -11,6 +11,8 @@ import androidx.compose.ui.unit.dp
 import com.example.parku.R
 import com.example.parku.ui.theme.AppColors
 
+//Iconos
+
 // Los archivos son los iconos exportados del Figma del equipo.
 @Composable
 fun DesignIcon(
