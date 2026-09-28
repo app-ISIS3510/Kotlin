@@ -29,16 +29,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.ParkingCard
-import com.example.parku.ui.data.ParkingLot
-import com.example.parku.ui.data.parkingLots
+import com.example.parku.data.Parking
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
 
 @Composable
 fun ParkingListScreen(
     currentIndex: Int,
+    parkingLots: List<Parking>,
     onNavTap: (Int) -> Unit,
-    onSelectParking: ((ParkingLot) -> Unit)? = null,
+    onSelectParking: ((Parking) -> Unit)? = null,
     onOpenSearch: () -> Unit = {},
 ) {
     Column(

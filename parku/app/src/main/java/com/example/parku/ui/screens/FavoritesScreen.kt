@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.parku.data.Parking
 import com.example.parku.ui.components.DesignIcon
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.PickupButton
@@ -30,18 +31,12 @@ import com.example.parku.ui.components.ScreenHeader
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
 
-/** Equivale al Map<String, String> que usa la version en Flutter. */
-data class Favorite(
-    val name: String,
-    val address: String,
-)
-
 @Composable
 fun FavoritesScreen(
-    favorites: List<Favorite>,
-    onRemove: (Int) -> Unit,
+    favorites: List<Parking>,
+    onRemove: (Parking) -> Unit,
     onNavTap: (Int) -> Unit,
-    onSelectFavorite: (Favorite) -> Unit = {},
+    onSelectFavorite: (Parking) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -108,7 +103,7 @@ fun FavoritesScreen(
                         height = 44.dp,
                         background = AppColors.white,
                         foreground = AppColors.primary,
-                        onPressed = { onRemove(i) },
+                        onPressed = { onRemove(favorite) },
                     )
                 }
 

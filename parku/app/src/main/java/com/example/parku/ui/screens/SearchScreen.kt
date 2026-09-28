@@ -23,20 +23,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.parku.data.Parking
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.PickupButton
 import com.example.parku.ui.components.ScreenHeader
 import com.example.parku.ui.components.SearchByNameLabel
 import com.example.parku.ui.components.SearchInput
 import com.example.parku.ui.components.SectionCaption
-import com.example.parku.ui.data.parkingLots
-import com.example.parku.ui.data.searchParkingLots
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
 
 @Composable
 fun SearchScreen(
     initialQuery: String = "",
+    parkingLots: List<Parking>,
     onSubmit: (String) -> Unit,
     onNavTap: (Int) -> Unit,
     onBack: () -> Unit,
@@ -44,8 +44,17 @@ fun SearchScreen(
     var query by rememberSaveable { mutableStateOf(initialQuery) }
 
     // Con el campo vacio se sugieren todos; al escribir se filtran en vivo.
+    // El filtrado es local sobre la lista ya descargada, asi responde a cada
+    // tecla sin ir al servidor; la consulta real se lanza al confirmar.
     val typing = query.isNotBlank()
-    val matches = if (typing) searchParkingLots(query) else parkingLots
+    val matches = if (typing) {
+        parkingLots.filter {
+            it.name.contains(query.trim(), ignoreCase = true) ||
+                it.address.contains(query.trim(), ignoreCase = true)
+        }
+    } else {
+        parkingLots
+    }
 
     Column(
         modifier = Modifier

@@ -31,15 +31,15 @@ import com.example.parku.ui.components.ScreenHeader
 import com.example.parku.ui.components.SearchByNameLabel
 import com.example.parku.ui.components.SearchQueryBox
 import com.example.parku.ui.components.SectionCaption
-import com.example.parku.ui.data.ParkingLot
+import com.example.parku.data.Parking
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
 
 @Composable
 fun SearchResultsScreen(
     query: String,
-    results: List<ParkingLot>,
-    onSelectParking: (ParkingLot) -> Unit,
+    results: List<Parking>,
+    onSelectParking: (Parking) -> Unit,
     onClearSearch: () -> Unit,
     onNavTap: (Int) -> Unit,
     onBack: () -> Unit,
@@ -98,7 +98,7 @@ fun SearchResultsScreen(
 
 @Composable
 private fun SearchResultCard(
-    parking: ParkingLot,
+    parking: Parking,
     onClick: () -> Unit,
 ) {
     Row(

@@ -1,24 +1,39 @@
 package com.example.parku.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.example.parku.ui.data.ParkingLot
-import com.example.parku.ui.data.findParkingLot
-import com.example.parku.ui.data.searchParkingLots
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.parku.data.Parking
+import com.example.parku.data.ParkuViewModel
+import com.example.parku.data.isoToPickupLabel
+import kotlinx.coroutines.delay
+
+/** Cada cuanto se relee el backend mientras la app esta en pantalla. */
+private const val REFRESH_INTERVAL_MS = 5_000L
 
 /**
  * Equivale a las rutas que en Flutter se abren con Navigator.push
  * por encima de la pantalla con pestanas.
  */
 private sealed interface Overlay {
-    data class Details(val parking: ParkingLot) : Overlay
+    data class Details(val parking: Parking) : Overlay
 
-    data class Pickup(val parking: ParkingLot) : Overlay
+    data class Pickup(val parking: Parking) : Overlay
 
     data object ChangePickup : Overlay
 
@@ -28,32 +43,19 @@ private sealed interface Overlay {
 }
 
 @Composable
-fun MainNavigationScreen() {
+fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
     var currentIndex by remember { mutableStateOf(0) }
-
-    // Arranque en limpio: sin parqueadero activo y sin favoritos. Se llenan
-    // cuando el usuario guarda un favorito o inicia un parqueo.
-    var hasActiveParking by remember { mutableStateOf(false) }
-    var pickupTime by remember { mutableStateOf("4:00") }
-    var parkingName by remember { mutableStateOf("") }
-    var parkingAddress by remember { mutableStateOf("") }
-
-    val favorites = remember { mutableStateListOf<Favorite>() }
 
     // Pila simple: cada pantalla apilada se cierra con atras, en orden.
     val stack = remember { mutableStateListOf<Overlay>() }
 
-    fun push(overlay: Overlay) {
-        stack.add(overlay)
-    }
+    fun push(overlay: Overlay) = stack.add(overlay)
 
     fun pop() {
         if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex)
     }
 
-    fun closeAll() {
-        stack.clear()
-    }
+    fun closeAll() = stack.clear()
 
     // Cierra lo que haya apilado antes de cambiar de pestana.
     val changePageFromOverlay: (Int) -> Unit = { index ->
@@ -64,145 +66,171 @@ fun MainNavigationScreen() {
     val changePage: (Int) -> Unit = { index -> currentIndex = index }
 
     // El boton atras del sistema se comporta como el Navigator.pop de Flutter.
-    BackHandler(enabled = stack.isNotEmpty()) {
-        pop()
+    BackHandler(enabled = stack.isNotEmpty()) { pop() }
+
+    // Mientras la app este en pantalla, relee cada pocos segundos. Asi se ve lo
+    // que cambio desde otro dispositivo sin tener que salir y volver a entrar.
+    // El ciclo se detiene solo cuando la app pasa a segundo plano.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            var first = true
+            while (true) {
+                viewModel.refresh(silent = !first)
+                first = false
+                delay(REFRESH_INTERVAL_MS)
+            }
+        }
     }
 
-    val current = stack.lastOrNull()
+    // Y tambien al cambiar de pestana, que es cuando mas se nota.
+    LaunchedEffect(currentIndex) {
+        if (currentIndex != 0) viewModel.refresh(silent = true)
+    }
 
-    if (current != null) {
-        when (current) {
-            is Overlay.Details -> {
-                val parking = current.parking
-                val isFavorite = favorites.any { it.name == parking.name }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-                ParkingDetailsScreen(
-                    parking = parking,
-                    isFavorite = isFavorite,
-                    onToggleFavorite = {
-                        if (isFavorite) {
-                            favorites.removeAll { it.name == parking.name }
-                        } else {
-                            favorites.add(Favorite(parking.name, parking.address))
-                        }
-                    },
-                    onParkHere = { push(Overlay.Pickup(parking)) },
-                    onNavTap = changePageFromOverlay,
-                    onBack = { pop() },
-                )
-            }
+    // Los errores del backend se avisan sin tumbar la pantalla.
+    LaunchedEffect(viewModel.errorMessage) {
+        viewModel.errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissError()
+        }
+    }
 
-            is Overlay.Pickup -> PickupTimeScreen(
-                onNavTap = changePageFromOverlay,
-                onBack = { pop() },
-                onStartParking = { time ->
-                    closeAll()
-                    pickupTime = time
-                    parkingName = current.parking.name
-                    parkingAddress = current.parking.address
-                    hasActiveParking = true
-                    currentIndex = 3
-                },
-            )
+    val pickupLabel = viewModel.activeSession?.let { isoToPickupLabel(it.pickupTime) } ?: "4:00"
 
-            Overlay.ChangePickup -> ChangePickupTimeScreen(
-                initialTime = pickupTime,
-                onNavTap = changePageFromOverlay,
-                onBack = { pop() },
-                onSave = { time ->
-                    pop()
-                    pickupTime = time
-                },
-            )
+    Box(Modifier.fillMaxSize()) {
+        val current = stack.lastOrNull()
 
-            is Overlay.Search -> SearchScreen(
-                initialQuery = current.query,
-                onSubmit = { query ->
-                    pop()
-                    push(Overlay.Results(query))
-                },
-                onNavTap = changePageFromOverlay,
-                onBack = { pop() },
-            )
+        if (current != null) {
+            when (current) {
+                is Overlay.Details -> {
+                    val parking = current.parking
 
-            is Overlay.Results -> {
-                val results = searchParkingLots(current.query)
-
-                if (results.isEmpty()) {
-                    NoSearchResultsScreen(
-                        query = current.query,
-                        onEditSearch = {
-                            pop()
-                            push(Overlay.Search(current.query))
-                        },
-                        onShowAll = {
-                            closeAll()
-                            currentIndex = 1
-                        },
-                        onNavTap = changePageFromOverlay,
-                        onBack = { pop() },
-                    )
-                } else {
-                    SearchResultsScreen(
-                        query = current.query,
-                        results = results,
-                        onSelectParking = { parking -> push(Overlay.Details(parking)) },
-                        onClearSearch = {
-                            pop()
-                            push(Overlay.Search(""))
-                        },
+                    ParkingDetailsScreen(
+                        parking = parking,
+                        isFavorite = viewModel.isFavorite(parking),
+                        onToggleFavorite = { viewModel.toggleFavorite(parking) },
+                        onParkHere = { push(Overlay.Pickup(parking)) },
                         onNavTap = changePageFromOverlay,
                         onBack = { pop() },
                     )
                 }
-            }
-        }
-    } else {
-        when (currentIndex) {
-            1 -> ParkingListScreen(
-                currentIndex = currentIndex,
-                onNavTap = changePage,
-                // Flujo de la wiki: Parking Lots -> Parking Details -> Pickup Time.
-                onSelectParking = { parking -> push(Overlay.Details(parking)) },
-                onOpenSearch = { push(Overlay.Search("")) },
-            )
 
-            2 -> if (favorites.isEmpty()) {
-                NoFavoritesScreen(onNavTap = changePage)
-            } else {
-                FavoritesScreen(
-                    favorites = favorites,
-                    onNavTap = changePage,
-                    onRemove = { index -> favorites.removeAt(index) },
-                    onSelectFavorite = { favorite ->
-                        findParkingLot(favorite.name)?.let { push(Overlay.Details(it)) }
+                is Overlay.Pickup -> PickupTimeScreen(
+                    onNavTap = changePageFromOverlay,
+                    onBack = { pop() },
+                    onStartParking = { time ->
+                        viewModel.startParking(current.parking, time) {
+                            closeAll()
+                            currentIndex = 3
+                        }
                     },
                 )
-            }
 
-            3 -> if (hasActiveParking) {
-                MyParkingScreen(
+                Overlay.ChangePickup -> ChangePickupTimeScreen(
+                    initialTime = pickupLabel,
+                    onNavTap = changePageFromOverlay,
+                    onBack = { pop() },
+                    onSave = { time -> viewModel.changePickupTime(time) { pop() } },
+                )
+
+                is Overlay.Search -> SearchScreen(
+                    initialQuery = current.query,
+                    parkingLots = viewModel.parkingLots,
+                    onSubmit = { query ->
+                        viewModel.search(query)
+                        pop()
+                        push(Overlay.Results(query))
+                    },
+                    onNavTap = changePageFromOverlay,
+                    onBack = { pop() },
+                )
+
+                is Overlay.Results -> {
+                    val results = viewModel.searchResults
+
+                    if (results.isEmpty()) {
+                        NoSearchResultsScreen(
+                            query = current.query,
+                            onEditSearch = {
+                                pop()
+                                push(Overlay.Search(current.query))
+                            },
+                            onShowAll = {
+                                closeAll()
+                                currentIndex = 1
+                            },
+                            onNavTap = changePageFromOverlay,
+                            onBack = { pop() },
+                        )
+                    } else {
+                        SearchResultsScreen(
+                            query = current.query,
+                            results = results,
+                            onSelectParking = { parking -> push(Overlay.Details(parking)) },
+                            onClearSearch = {
+                                pop()
+                                push(Overlay.Search(""))
+                            },
+                            onNavTap = changePageFromOverlay,
+                            onBack = { pop() },
+                        )
+                    }
+                }
+            }
+        } else {
+            when (currentIndex) {
+                1 -> ParkingListScreen(
+                    currentIndex = currentIndex,
+                    parkingLots = viewModel.parkingLots,
+                    onNavTap = changePage,
+                    // Flujo de la wiki: Parking Lots -> Parking Details -> Pickup Time.
+                    onSelectParking = { parking -> push(Overlay.Details(parking)) },
+                    onOpenSearch = { push(Overlay.Search("")) },
+                )
+
+                2 -> if (viewModel.favorites.isEmpty()) {
+                    NoFavoritesScreen(onNavTap = changePage)
+                } else {
+                    FavoritesScreen(
+                        favorites = viewModel.favorites,
+                        onNavTap = changePage,
+                        onRemove = { parking -> viewModel.toggleFavorite(parking) },
+                        onSelectFavorite = { parking -> push(Overlay.Details(parking)) },
+                    )
+                }
+
+                3 -> if (viewModel.hasActiveParking) {
+                    MyParkingScreen(
+                        currentIndex = currentIndex,
+                        onNavTap = changePage,
+                        onEndParking = { viewModel.endParking() },
+                        onChangePickupTime = { push(Overlay.ChangePickup) },
+                        pickupTime = pickupLabel,
+                        parkingName = viewModel.activeParking?.name.orEmpty(),
+                        parkingAddress = viewModel.activeParking?.address.orEmpty(),
+                    )
+                } else {
+                    NoActiveParkingScreen(
+                        currentIndex = currentIndex,
+                        onNavTap = changePage,
+                    )
+                }
+
+                else -> HomeScreen(
                     currentIndex = currentIndex,
                     onNavTap = changePage,
-                    onEndParking = { hasActiveParking = false },
-                    onChangePickupTime = { push(Overlay.ChangePickup) },
-                    pickupTime = pickupTime,
-                    parkingName = parkingName,
-                    parkingAddress = parkingAddress,
-                )
-            } else {
-                NoActiveParkingScreen(
-                    currentIndex = currentIndex,
-                    onNavTap = changePage,
+                    hasActiveParking = viewModel.hasActiveParking,
+                    onOpenMyParking = { currentIndex = 3 },
                 )
             }
-
-            else -> HomeScreen(
-                currentIndex = currentIndex,
-                onNavTap = changePage,
-                hasActiveParking = hasActiveParking,
-                onOpenMyParking = { currentIndex = 3 },
-            )
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }

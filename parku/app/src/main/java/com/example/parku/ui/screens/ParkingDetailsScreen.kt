@@ -36,13 +36,13 @@ import com.example.parku.ui.components.DesignIcon
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.PickupButton
 import com.example.parku.ui.components.ScreenHeader
-import com.example.parku.ui.data.ParkingLot
+import com.example.parku.data.Parking
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
 
 @Composable
 fun ParkingDetailsScreen(
-    parking: ParkingLot,
+    parking: Parking,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
     onParkHere: () -> Unit,
@@ -132,8 +132,8 @@ fun ParkingDetailsScreen(
             // CUPOS POR TIPO DE VEHICULO
             Row {
                 SpacesCard(
-                    spaces = parking.carSpaces,
-                    price = parking.carPrice,
+                    spaces = parking.availableCarSpaces,
+                    price = parking.priceLabel,
                     icon = { DesignIcon("car", size = 22.dp) },
                     modifier = Modifier.weight(1f),
                 )
@@ -141,8 +141,8 @@ fun ParkingDetailsScreen(
                 Spacer(Modifier.width(12.dp))
 
                 SpacesCard(
-                    spaces = parking.motorcycleSpaces,
-                    price = parking.motorcyclePrice,
+                    spaces = parking.availableMotorcycleSpaces,
+                    price = parking.priceLabel,
                     icon = {
                         Icon(
                             imageVector = Icons.Outlined.TwoWheeler,
