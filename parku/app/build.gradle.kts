@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -50,6 +51,14 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+
+    // Backend: mismo Supabase que usa la version en Flutter
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.1.4"))
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.ktor:ktor-client-okhttp:3.0.3")
+
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-tooling-preview")
