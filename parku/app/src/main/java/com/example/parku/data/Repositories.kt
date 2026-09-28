@@ -81,10 +81,6 @@ object FavoriteRepository {
             filter { eq("parking_id", parkingId) }
         }
     }
-
-    suspend fun toggleFavorite(parkingId: String) {
-        if (isFavorite(parkingId)) removeFavorite(parkingId) else addFavorite(parkingId)
-    }
 }
 
 /** Espejo de lib/repositories/session_repository.dart. */
