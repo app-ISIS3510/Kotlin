@@ -31,20 +31,25 @@ import androidx.compose.ui.unit.sp
 import com.example.parku.ui.components.DesignIcon
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.PickupButton
+import com.example.parku.ui.components.PickupTimeSelector
 import com.example.parku.ui.components.ScreenHeader
-import com.example.parku.ui.components.SuggestedTimes
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
 import kotlinx.coroutines.launch
 
 @Composable
 fun PickupTimeScreen(
+    availableTimes: List<String>,
+    vehicleLabel: String,
+    vehiclePlate: String,
     onNavTap: (Int) -> Unit,
     onStartParking: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     // Solo cambia la maqueta; no se guarda en un servidor.
-    var selectedTime by rememberSaveable { mutableStateOf("4:00") }
+    var selectedTime by rememberSaveable(availableTimes.firstOrNull()) {
+        mutableStateOf(availableTimes.firstOrNull())
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -99,7 +104,7 @@ fun PickupTimeScreen(
                     DesignIcon("car")
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        text = "Car",
+                        text = vehicleLabel,
                         fontFamily = Inter,
                         fontSize = 16.sp,
                         lineHeight = 21.6.sp,
@@ -111,7 +116,7 @@ fun PickupTimeScreen(
                 Spacer(Modifier.height(12.dp))
 
                 Text(
-                    text = "ABC123",
+                    text = vehiclePlate,
                     fontFamily = Inter,
                     fontSize = 22.sp,
                     lineHeight = 29.7.sp,
@@ -127,7 +132,9 @@ fun PickupTimeScreen(
                     foreground = AppColors.primary,
                     onPressed = {
                         scope.launch {
-                            snackbarHostState.showSnackbar("Demo vehicle: Car · ABC123")
+                            snackbarHostState.showSnackbar(
+                                "Manage your vehicles from your profile",
+                            )
                         }
                     },
                 )
@@ -146,38 +153,17 @@ fun PickupTimeScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(AppColors.lightPurple)
-                    .padding(16.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                DesignIcon("clock", size = 28.dp)
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    text = "$selectedTime PM",
-                    fontFamily = Inter,
-                    fontSize = 30.sp,
-                    lineHeight = 40.5.sp,
-                    fontWeight = FontWeight.W700,
-                    color = AppColors.primary,
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            SuggestedTimes(
+            PickupTimeSelector(
+                times = availableTimes,
                 selectedTime = selectedTime,
-                onChanged = { selectedTime = it },
+                onSelect = { selectedTime = it },
             )
 
             Spacer(Modifier.height(16.dp))
 
             PickupButton(
                 text = "Start parking",
-                onPressed = { onStartParking(selectedTime) },
+                onPressed = { selectedTime?.let(onStartParking) },
             )
 
             Spacer(Modifier.height(16.dp))

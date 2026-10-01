@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.parku.ui.components.NavBar
+import com.example.parku.ui.components.ScreenHeader
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
 
@@ -29,6 +30,7 @@ import com.example.parku.ui.theme.Inter
 fun NoActiveParkingScreen(
     currentIndex: Int,
     onNavTap: (Int) -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -40,13 +42,7 @@ fun NoActiveParkingScreen(
                 .weight(1f)
                 .padding(start = 30.dp, top = 22.dp, end = 30.dp, bottom = 20.dp),
         ) {
-            Text(
-                text = "My parking",
-                fontFamily = Inter,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.W700,
-                color = AppColors.darkText,
-            )
+            ScreenHeader(title = "My parking", onBack = onBack)
 
             Spacer(Modifier.height(110.dp))
 

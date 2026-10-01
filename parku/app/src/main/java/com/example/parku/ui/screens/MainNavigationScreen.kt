@@ -11,6 +11,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,8 +22,10 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.parku.data.Parking
 import com.example.parku.data.ParkuViewModel
+import com.example.parku.data.generateAvailableTimes
 import com.example.parku.data.isoToPickupLabel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Cada cuanto se relee el backend mientras la app esta en pantalla. */
 private const val REFRESH_INTERVAL_MS = 5_000L
@@ -40,6 +44,51 @@ private sealed interface Overlay {
     data class Search(val query: String) : Overlay
 
     data class Results(val query: String) : Overlay
+
+    data object MyParking : Overlay
+
+    data object Vehicles : Overlay
+
+    data object AddVehicle : Overlay
+
+    data object EditProfile : Overlay
+}
+
+/**
+ * Equivale a lib/screens/auth_gate.dart: sin sesion iniciada no se entra a la app.
+ */
+@Composable
+fun AuthGate(viewModel: ParkuViewModel = viewModel()) {
+    var showCreateAccount by rememberSaveable { mutableStateOf(false) }
+
+    if (viewModel.isSignedIn) {
+        MainNavigationScreen(viewModel)
+        return
+    }
+
+    if (showCreateAccount) {
+        CreateAccountScreen(
+            busy = viewModel.authBusy,
+            error = viewModel.authError,
+            onCreateAccount = { name, email, password ->
+                viewModel.signUp(name, email, password)
+            },
+            onGoToSignIn = {
+                viewModel.dismissAuthError()
+                showCreateAccount = false
+            },
+        )
+    } else {
+        SignInScreen(
+            busy = viewModel.authBusy,
+            error = viewModel.authError,
+            onSignIn = { email, password -> viewModel.signIn(email, password) },
+            onGoToCreateAccount = {
+                viewModel.dismissAuthError()
+                showCreateAccount = true
+            },
+        )
+    }
 }
 
 @Composable
@@ -89,6 +138,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     // Los errores del backend se avisan sin tumbar la pantalla.
     LaunchedEffect(viewModel.errorMessage) {
@@ -118,19 +168,36 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     )
                 }
 
-                is Overlay.Pickup -> PickupTimeScreen(
+                is Overlay.Pickup -> if (viewModel.selectedVehicle == null) {
+                    AddVehicleScreen(
+                        busy = false,
+                        onAdd = { type, plate -> viewModel.addVehicle(type, plate) },
+                        onBack = { pop() },
+                    )
+                } else PickupTimeScreen(
+                    availableTimes = generateAvailableTimes(
+                        current.parking.openingTime,
+                        current.parking.closingTime,
+                    ),
+                    vehicleLabel = viewModel.selectedVehicle?.label.orEmpty(),
+                    vehiclePlate = viewModel.selectedVehicle?.plate.orEmpty(),
                     onNavTap = changePageFromOverlay,
                     onBack = { pop() },
                     onStartParking = { time ->
                         viewModel.startParking(current.parking, time) {
                             closeAll()
                             currentIndex = 3
+                            push(Overlay.MyParking)
                         }
                     },
                 )
 
                 Overlay.ChangePickup -> ChangePickupTimeScreen(
                     initialTime = pickupLabel,
+                    availableTimes = generateAvailableTimes(
+                        viewModel.activeParking?.openingTime,
+                        viewModel.activeParking?.closingTime,
+                    ),
                     onNavTap = changePageFromOverlay,
                     onBack = { pop() },
                     onSave = { time -> viewModel.changePickupTime(time) { pop() } },
@@ -145,6 +212,59 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         push(Overlay.Results(query))
                     },
                     onNavTap = changePageFromOverlay,
+                    onBack = { pop() },
+                )
+
+                Overlay.MyParking -> if (viewModel.hasActiveParking) {
+                    MyParkingScreen(
+                        currentIndex = 3,
+                        onNavTap = changePageFromOverlay,
+                        onEndParking = { viewModel.endParking() },
+                        onChangePickupTime = { push(Overlay.ChangePickup) },
+                        pickupTime = pickupLabel,
+                        pickupIso = viewModel.activeSession?.pickupTime.orEmpty(),
+                        parkingName = viewModel.activeParking?.name.orEmpty(),
+                        parkingAddress = viewModel.activeParking?.address.orEmpty(),
+                        vehicleLabel = viewModel.activeSession?.let {
+                            if (it.vehicleType == "motorcycle") "Motorcycle" else "Car"
+                        }.orEmpty(),
+                        vehiclePlate = viewModel.activeSession?.vehiclePlate
+                            ?: viewModel.selectedVehicle?.plate.orEmpty(),
+                        onBack = { pop() },
+                    )
+                } else {
+                    NoActiveParkingScreen(
+                        currentIndex = 3,
+                        onNavTap = changePageFromOverlay,
+                        onBack = { pop() },
+                    )
+                }
+
+                Overlay.EditProfile -> EditProfileScreen(
+                    initialName = viewModel.userName,
+                    initialEmail = viewModel.userEmail,
+                    busy = viewModel.authBusy,
+                    onSave = { name, email ->
+                        viewModel.saveProfile(name, email) { message ->
+                            pop()
+                            scope.launch { snackbarHostState.showSnackbar(message) }
+                        }
+                    },
+                    onNavTap = changePageFromOverlay,
+                    onBack = { pop() },
+                )
+
+                Overlay.Vehicles -> VehiclesScreen(
+                    vehicles = viewModel.vehicles,
+                    onSelect = { viewModel.selectVehicle(it) },
+                    onAddVehicle = { push(Overlay.AddVehicle) },
+                    onNavTap = changePageFromOverlay,
+                    onBack = { pop() },
+                )
+
+                Overlay.AddVehicle -> AddVehicleScreen(
+                    busy = false,
+                    onAdd = { type, plate -> viewModel.addVehicle(type, plate) { pop() } },
                     onBack = { pop() },
                 )
 
@@ -202,22 +322,18 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     )
                 }
 
-                3 -> if (viewModel.hasActiveParking) {
-                    MyParkingScreen(
-                        currentIndex = currentIndex,
-                        onNavTap = changePage,
-                        onEndParking = { viewModel.endParking() },
-                        onChangePickupTime = { push(Overlay.ChangePickup) },
-                        pickupTime = pickupLabel,
-                        parkingName = viewModel.activeParking?.name.orEmpty(),
-                        parkingAddress = viewModel.activeParking?.address.orEmpty(),
-                    )
-                } else {
-                    NoActiveParkingScreen(
-                        currentIndex = currentIndex,
-                        onNavTap = changePage,
-                    )
-                }
+                3 -> ProfileScreen(
+                    currentIndex = currentIndex,
+                    fullName = viewModel.userName,
+                    email = viewModel.userEmail,
+                    busy = viewModel.authBusy,
+                    onNavTap = changePage,
+                    onEditProfile = { push(Overlay.EditProfile) },
+                    onMyVehicles = { push(Overlay.Vehicles) },
+                    onMyParking = { push(Overlay.MyParking) },
+                    onMyFavorites = { changePage(2) },
+                    onSignOut = { viewModel.signOut() },
+                )
 
                 else -> HomeScreen(
                     currentIndex = currentIndex,

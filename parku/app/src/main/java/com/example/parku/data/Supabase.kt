@@ -1,6 +1,7 @@
 package com.example.parku.data
 
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 
@@ -20,6 +21,7 @@ val supabase: SupabaseClient by lazy {
         supabaseUrl = SUPABASE_URL,
         supabaseKey = SUPABASE_KEY,
     ) {
+        install(Auth)
         install(Postgrest)
     }
 }

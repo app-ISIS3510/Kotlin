@@ -6,11 +6,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
 
 /**
  * Unico dueno del estado de la app. Sustituye a los datos de ejemplo que antes
@@ -40,7 +35,119 @@ class ParkuViewModel : ViewModel() {
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
+    var isSignedIn by mutableStateOf(AuthRepository.currentUserId() != null)
+        private set
+
+    var userName by mutableStateOf(AuthRepository.currentUserName().orEmpty())
+        private set
+
+    var userEmail by mutableStateOf(AuthRepository.currentUserEmail().orEmpty())
+        private set
+
+    var vehicles by mutableStateOf<List<Vehicle>>(emptyList())
+        private set
+
+    var authError by mutableStateOf<String?>(null)
+        private set
+
+    var authBusy by mutableStateOf(false)
+        private set
+
     val hasActiveParking: Boolean get() = activeSession != null
+
+    /** El vehiculo marcado en el perfil, o el primero que haya. */
+    val selectedVehicle: Vehicle? get() = vehicles.firstOrNull { it.isSelected } ?: vehicles.firstOrNull()
+
+    fun signIn(email: String, password: String) {
+        runAuth { AuthRepository.signIn(email, password) }
+    }
+
+    fun signUp(fullName: String, email: String, password: String) {
+        runAuth { AuthRepository.signUp(fullName, email, password) }
+    }
+
+    private fun runAuth(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            authBusy = true
+            authError = null
+            try {
+                block()
+                isSignedIn = AuthRepository.currentUserId() != null
+                if (isSignedIn) refresh()
+            } catch (e: Exception) {
+                authError = e.message ?: "Could not sign in"
+            } finally {
+                authBusy = false
+            }
+        }
+    }
+
+    fun signOut() {
+        viewModelScope.launch {
+            runCatching { AuthRepository.signOut() }
+            isSignedIn = false
+            favorites = emptyList()
+            vehicles = emptyList()
+            activeSession = null
+            activeParking = null
+        }
+    }
+
+    fun dismissAuthError() {
+        authError = null
+    }
+
+    fun saveProfile(fullName: String, email: String, onDone: (String) -> Unit = {}) {
+        val emailChanged = email.trim() != userEmail
+        viewModelScope.launch {
+            authBusy = true
+            try {
+                AuthRepository.updateProfile(fullName, email)
+                userName = fullName.trim()
+                if (!emailChanged) userEmail = AuthRepository.currentUserEmail().orEmpty()
+                onDone(
+                    if (emailChanged) {
+                        "Name saved. Check your email to confirm the new address."
+                    } else {
+                        "Profile updated."
+                    },
+                )
+            } catch (e: Exception) {
+                errorMessage = e.message ?: "Could not update the profile"
+            } finally {
+                authBusy = false
+            }
+        }
+    }
+
+    fun addVehicle(vehicleType: String, plate: String, onDone: () -> Unit = {}) {
+        val problem = ProfileValidation.validatePlate(vehicleType, plate)
+        if (problem != null) {
+            errorMessage = problem
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                VehicleRepository.addVehicle(vehicleType, plate)
+                vehicles = VehicleRepository.getVehicles()
+                onDone()
+            } catch (e: Exception) {
+                errorMessage = e.message ?: "Could not add the vehicle"
+            }
+        }
+    }
+
+    fun selectVehicle(vehicle: Vehicle) {
+        viewModelScope.launch {
+            try {
+                VehicleRepository.selectVehicle(vehicle.id)
+                vehicles = VehicleRepository.getVehicles()
+            } catch (e: Exception) {
+                errorMessage = e.message ?: "Could not change the vehicle"
+            }
+        }
+    }
 
     /**
      * La primera carga y las siguientes las dispara MainNavigationScreen cuando
@@ -58,9 +165,15 @@ class ParkuViewModel : ViewModel() {
                 errorMessage = null
             }
             try {
+                isSignedIn = AuthRepository.currentUserId() != null
+                userName = AuthRepository.currentUserName().orEmpty()
+                userEmail = AuthRepository.currentUserEmail().orEmpty()
                 parkingLots = ParkingRepository.getParkingLots()
-                favorites = FavoriteRepository.getFavorites()
-                loadActiveSession()
+                if (isSignedIn) {
+                    favorites = FavoriteRepository.getFavorites()
+                    vehicles = VehicleRepository.getVehicles()
+                    loadActiveSession()
+                }
             } catch (e: Exception) {
                 if (!silent) errorMessage = e.message ?: "Could not reach the server"
             } finally {
@@ -114,11 +227,18 @@ class ParkuViewModel : ViewModel() {
     }
 
     fun startParking(parking: Parking, pickupLabel: String, onDone: () -> Unit = {}) {
+        val vehicle = selectedVehicle
+        if (vehicle == null) {
+            errorMessage = "Add a vehicle before starting a parking session"
+            return
+        }
+
         viewModelScope.launch {
             try {
                 val session = SessionRepository.createSession(
                     parkingId = parking.id,
                     pickupTimeIso = pickupLabelToIso(pickupLabel),
+                    vehicleId = vehicle.id,
                 )
                 activeSession = session
                 activeParking = parking
@@ -168,47 +288,4 @@ class ParkuViewModel : ViewModel() {
             runCatching { AnalyticsRepository.trackEvent(eventType, screen, parkingId) }
         }
     }
-}
-
-private fun isoFormatter(): SimpleDateFormat =
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-
-fun nowIso(): String = isoFormatter().format(Date())
-
-/**
- * "4:00" -> hoy a las 16:00 locales, en UTC. Las opciones de la maqueta
- * (3:30, 4:00, 4:30) son todas PM.
- */
-fun pickupLabelToIso(label: String): String {
-    val parts = label.split(":")
-    var hour = parts.getOrNull(0)?.trim()?.toIntOrNull() ?: 12
-    val minute = parts.getOrNull(1)?.trim()?.toIntOrNull() ?: 0
-    if (hour < 12) hour += 12
-
-    val calendar = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, hour)
-        set(Calendar.MINUTE, minute)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-
-    return isoFormatter().format(calendar.time)
-}
-
-/** "2026-09-28T21:00:00Z" -> "4:00", para volver a la etiqueta que muestra la UI. */
-fun isoToPickupLabel(iso: String): String {
-    val parsed = runCatching { isoFormatter().parse(iso) }.getOrNull()
-        ?: runCatching {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US).parse(iso)
-        }.getOrNull()
-        ?: return "4:00"
-
-    val calendar = Calendar.getInstance().apply { time = parsed }
-    val hour24 = calendar.get(Calendar.HOUR_OF_DAY)
-    val hour12 = if (hour24 % 12 == 0) 12 else hour24 % 12
-    val minute = calendar.get(Calendar.MINUTE)
-
-    return "$hour12:${minute.toString().padStart(2, '0')}"
 }

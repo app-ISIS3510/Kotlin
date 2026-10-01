@@ -24,6 +24,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,9 +38,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.parku.data.formatTime12h
+import com.example.parku.data.remainingUntil
 import com.example.parku.ui.components.NavBar
+import com.example.parku.ui.components.ScreenHeader
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
+import kotlinx.coroutines.delay
 
 @Composable
 fun MyParkingScreen(
@@ -43,10 +52,25 @@ fun MyParkingScreen(
     onNavTap: (Int) -> Unit,
     onEndParking: () -> Unit,
     onChangePickupTime: (() -> Unit)? = null,
-    pickupTime: String = "4:00",
+    pickupTime: String,
+    pickupIso: String,
     parkingName: String = "City U Parking",
-    parkingAddress: String = "Calle 20 · Las Aguas, Bogotá",
+    parkingAddress: String = "",
+    vehicleLabel: String = "Car",
+    vehiclePlate: String = "",
+    onBack: (() -> Unit)? = null,
 ) {
+    // Se recalcula cada segundo contra el reloj del dispositivo,
+    // como el Timer.periodic de my_parking.dart en Flutter.
+    var remaining by remember(pickupIso) { mutableStateOf(remainingUntil(pickupIso)) }
+
+    LaunchedEffect(pickupIso) {
+        while (true) {
+            remaining = remainingUntil(pickupIso)
+            delay(1_000)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -59,13 +83,7 @@ fun MyParkingScreen(
                 .padding(start = 30.dp, top = 22.dp, end = 30.dp, bottom = 20.dp),
         ) {
             // TITLE
-            Text(
-                text = "My parking",
-                fontFamily = Inter,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.W700,
-                color = AppColors.darkText,
-            )
+            ScreenHeader(title = "My parking", onBack = onBack)
 
             Spacer(Modifier.height(30.dp))
 
@@ -108,7 +126,7 @@ fun MyParkingScreen(
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        text = "01:30",
+                        text = "%02d:%02d".format(remaining.first, remaining.second),
                         fontFamily = Inter,
                         fontSize = 50.sp,
                         fontWeight = FontWeight.W700,
@@ -140,7 +158,7 @@ fun MyParkingScreen(
                             color = AppColors.darkText,
                         ),
                     ) {
-                        append("$pickupTime PM")
+                        append(formatTime12h(pickupTime))
                     }
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -170,14 +188,14 @@ fun MyParkingScreen(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Car",
+                        text = vehicleLabel,
                         fontFamily = Inter,
                         fontSize = 16.sp,
                         color = AppColors.greyText,
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = "ABC123",
+                        text = vehiclePlate,
                         fontFamily = Inter,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.W700,

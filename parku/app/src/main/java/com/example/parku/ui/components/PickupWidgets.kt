@@ -101,26 +101,3 @@ fun PickupButton(
         )
     }
 }
-
-@Composable
-fun SuggestedTimes(
-    selectedTime: String,
-    onChanged: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val times = listOf("3:30", "4:00", "4:30")
-
-    Row(modifier = modifier.fillMaxWidth()) {
-        times.forEachIndexed { i, time ->
-            if (i > 0) Spacer(Modifier.width(6.dp))
-
-            PickupButton(
-                text = time,
-                background = AppColors.lightPurple,
-                foreground = AppColors.primary,
-                onPressed = { onChanged(time) },
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}

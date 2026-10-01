@@ -4,11 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,25 +15,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.PickupButton
+import com.example.parku.ui.components.PickupTimeSelector
+import com.example.parku.ui.components.SectionCaption
 import com.example.parku.ui.components.ScreenHeader
-import com.example.parku.ui.components.SuggestedTimes
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
 
 @Composable
 fun ChangePickupTimeScreen(
-    initialTime: String = "4:00",
+    initialTime: String,
+    availableTimes: List<String>,
     onNavTap: (Int) -> Unit,
     onSave: (String) -> Unit,
     onBack: () -> Unit,
 ) {
-    var selectedTime by rememberSaveable(initialTime) { mutableStateOf(initialTime) }
+    var selectedTime by rememberSaveable(initialTime) { mutableStateOf<String?>(initialTime) }
 
     Column(
         modifier = Modifier
@@ -76,46 +75,21 @@ fun ChangePickupTimeScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(AppColors.lightPurple)
-                    .padding(16.dp),
-            ) {
-                Text(
-                    text = "NEW PICKUP TIME",
-                    fontFamily = Inter,
-                    fontSize = 12.sp,
-                    lineHeight = 16.2.sp,
-                    fontWeight = FontWeight.W600,
-                    color = AppColors.primary,
-                )
+            SectionCaption("NEW PICKUP TIME")
 
-                Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
 
-                Text(
-                    text = "$selectedTime PM",
-                    fontFamily = Inter,
-                    fontSize = 36.sp,
-                    lineHeight = 48.6.sp,
-                    fontWeight = FontWeight.W700,
-                    color = AppColors.primary,
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            SuggestedTimes(
+            PickupTimeSelector(
+                times = availableTimes,
                 selectedTime = selectedTime,
-                onChanged = { selectedTime = it },
+                onSelect = { selectedTime = it },
             )
 
             Spacer(Modifier.height(16.dp))
 
             PickupButton(
                 text = "Save pickup time",
-                onPressed = { onSave(selectedTime) },
+                onPressed = { selectedTime?.let(onSave) },
             )
 
             Spacer(Modifier.height(16.dp))

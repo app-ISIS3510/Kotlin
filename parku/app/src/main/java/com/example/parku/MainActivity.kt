@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.runtime.Composable
-import com.example.parku.ui.screens.MainNavigationScreen
+import com.example.parku.ui.screens.AuthGate
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.ParkUTheme
 
@@ -36,7 +36,7 @@ fun ParkUApp() {
                 .background(AppColors.background)
                 .safeDrawingPadding(),
         ) {
-            MainNavigationScreen()
+            AuthGate()
         }
     }
 }

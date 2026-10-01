@@ -67,4 +67,18 @@ data class ParkingSession(
     @SerialName("started_at") val startedAt: String,
     @SerialName("ended_at") val endedAt: String? = null,
     val status: String,
+    @SerialName("vehicle_type") val vehicleType: String = "car",
+    @SerialName("vehicle_id") val vehicleId: String? = null,
+    @SerialName("vehicle_plate") val vehiclePlate: String? = null,
 )
+
+/** Espejo de lib/models/vehicle.dart. La tabla es `vehicles`. */
+@Serializable
+data class Vehicle(
+    val id: String,
+    @SerialName("vehicle_type") val vehicleType: String,
+    val plate: String,
+    @SerialName("is_selected") val isSelected: Boolean = false,
+) {
+    val label: String get() = if (vehicleType == "motorcycle") "Motorcycle" else "Car"
+}
