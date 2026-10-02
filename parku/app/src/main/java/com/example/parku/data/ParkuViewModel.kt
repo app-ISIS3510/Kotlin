@@ -29,6 +29,23 @@ class ParkuViewModel : ViewModel() {
     var searchResults by mutableStateOf<List<Parking>>(emptyList())
         private set
 
+    /** Ubicacion del telefono, null mientras no haya permiso o lectura. */
+    var userLocation by mutableStateOf<Pair<Double, Double>?>(null)
+        private set
+
+    fun updateUserLocation(location: Pair<Double, Double>?) {
+        userLocation = location
+    }
+
+    /**
+     * Los 4 parqueaderos mas cercanos. Si todavia no hay ubicacion, se devuelve
+     * la lista tal cual para no dejar la busqueda vacia.
+     */
+    val nearestParkingLots: List<Parking>
+        get() = userLocation?.let { (latitude, longitude) ->
+            nearestParkingLots(parkingLots, latitude, longitude)
+        } ?: parkingLots
+
     var isLoading by mutableStateOf(false)
         private set
 
@@ -138,6 +155,22 @@ class ParkuViewModel : ViewModel() {
         }
     }
 
+    fun deleteVehicle(vehicle: Vehicle, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                VehicleRepository.deleteVehicle(vehicle.id)
+                vehicles = VehicleRepository.getVehicles()
+                onDone()
+            } catch (e: Exception) {
+                errorMessage = e.message ?: "Could not delete the vehicle"
+            }
+        }
+    }
+
+    /** Pico y placa del vehiculo en uso, o null si no hay ninguno. */
+    val drivingRestriction: DrivingRestriction?
+        get() = selectedVehicle?.let { DrivingRestrictionService.check(it) }
+
     fun selectVehicle(vehicle: Vehicle) {
         viewModelScope.launch {
             try {
@@ -203,6 +236,7 @@ class ParkuViewModel : ViewModel() {
             try {
                 if (wasFavorite) {
                     FavoriteRepository.removeFavorite(parking.id)
+                    track("favorite_removed", screen = "favorites", parkingId = parking.id)
                 } else {
                     FavoriteRepository.addFavorite(parking.id)
                     track("favorite_added", screen = "parking_details", parkingId = parking.id)
@@ -258,6 +292,11 @@ class ParkuViewModel : ViewModel() {
                     sessionId = session.id,
                     pickupTimeIso = pickupLabelToIso(pickupLabel),
                 )
+                track(
+                    "pickup_time_changed",
+                    screen = "change_pickup_time",
+                    parkingId = session.parkingId,
+                )
                 onDone()
             } catch (e: Exception) {
                 errorMessage = e.message ?: "Could not update the pickup time"
@@ -265,17 +304,34 @@ class ParkuViewModel : ViewModel() {
         }
     }
 
-    fun endParking() {
+    var endingParking by mutableStateOf(false)
+        private set
+
+    fun endParking(onDone: () -> Unit = {}) {
         val session = activeSession ?: return
         viewModelScope.launch {
+            endingParking = true
             try {
                 SessionRepository.endSession(session.id, nowIso())
+                track("parking_ended", screen = "end_parking", parkingId = session.parkingId)
                 activeSession = null
                 activeParking = null
+                onDone()
             } catch (e: Exception) {
                 errorMessage = e.message ?: "Could not end parking"
+            } finally {
+                endingParking = false
             }
         }
+    }
+
+    /** parking_detail_viewed y navigation_opened, disparados desde la UI. */
+    fun trackDetailViewed(parkingId: String) {
+        track("parking_detail_viewed", screen = "parking_detail", parkingId = parkingId)
+    }
+
+    fun trackNavigationOpened(parkingId: String) {
+        track("navigation_opened", screen = "parking_detail", parkingId = parkingId)
     }
 
     fun dismissError() {

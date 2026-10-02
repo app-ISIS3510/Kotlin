@@ -288,6 +288,15 @@ object VehicleRepository {
         )
     }
 
+    suspend fun deleteVehicle(vehicleId: String) {
+        requireUserId()
+
+        supabase.postgrest.rpc(
+            function = "delete_my_vehicle",
+            parameters = buildJsonObject { put("p_vehicle_id", vehicleId) },
+        )
+    }
+
     suspend fun selectVehicle(vehicleId: String) {
         requireUserId()
 

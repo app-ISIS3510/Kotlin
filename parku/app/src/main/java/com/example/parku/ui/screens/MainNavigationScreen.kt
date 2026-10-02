@@ -1,6 +1,12 @@
 package com.example.parku.ui.screens
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHost
@@ -16,11 +22,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.parku.data.Parking
+import com.example.parku.data.DrivingRestrictionService
+import com.example.parku.data.LocationProvider
+import com.example.parku.data.NavigationLinks
 import com.example.parku.data.ParkuViewModel
 import com.example.parku.data.generateAvailableTimes
 import com.example.parku.data.isoToPickupLabel
@@ -47,11 +58,15 @@ private sealed interface Overlay {
 
     data object MyParking : Overlay
 
-    data object Vehicles : Overlay
+    data class Vehicles(val choosing: Boolean = false) : Overlay
 
     data object AddVehicle : Overlay
 
     data object EditProfile : Overlay
+
+    data object Restrictions : Overlay
+
+    data object EndParking : Overlay
 }
 
 /**
@@ -139,6 +154,42 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Permiso de ubicacion: se pide una vez al entrar, igual que el
+    // checkPermission/requestPermission del DistanceManager de Flutter.
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+
+    val locationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { granted ->
+        hasLocationPermission = granted.values.any { it }
+    }
+
+    // Con el permiso concedido se lee la posicion para ordenar por cercania.
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission) {
+            viewModel.updateUserLocation(LocationProvider.currentLocation(context))
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasLocationPermission) {
+            locationLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ),
+            )
+        }
+    }
 
     // Los errores del backend se avisan sin tumbar la pantalla.
     LaunchedEffect(viewModel.errorMessage) {
@@ -151,18 +202,52 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
     val pickupLabel = viewModel.activeSession?.let { isoToPickupLabel(it.pickupTime) } ?: "4:00"
 
     Box(Modifier.fillMaxSize()) {
-        val current = stack.lastOrNull()
+        // Abre Waze o Google Maps, con los mismos avisos que usa Flutter cuando
+    // el parqueadero no tiene coordenadas o no hay app que atienda el enlace.
+    fun openNavigation(parking: Parking?, app: String) {
+        val latitude = parking?.latitude
+        val longitude = parking?.longitude
+
+        if (latitude == null || longitude == null) {
+            scope.launch {
+                snackbarHostState.showSnackbar("Parking location is not available.")
+            }
+            return
+        }
+
+        val url = if (app == "Waze") {
+            NavigationLinks.waze(latitude, longitude)
+        } else {
+            NavigationLinks.googleMaps(latitude, longitude)
+        }
+
+        viewModel.trackNavigationOpened(parking.id)
+
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure {
+            scope.launch {
+                snackbarHostState.showSnackbar("Could not open $app: ${it.message}")
+            }
+        }
+    }
+
+    val current = stack.lastOrNull()
 
         if (current != null) {
             when (current) {
                 is Overlay.Details -> {
                     val parking = current.parking
 
+                    LaunchedEffect(parking.id) { viewModel.trackDetailViewed(parking.id) }
+
                     ParkingDetailsScreen(
                         parking = parking,
                         isFavorite = viewModel.isFavorite(parking),
                         onToggleFavorite = { viewModel.toggleFavorite(parking) },
                         onParkHere = { push(Overlay.Pickup(parking)) },
+                        onWaze = { openNavigation(parking, "Waze") },
+                        onGoogleMaps = { openNavigation(parking, "Google Maps") },
                         onNavTap = changePageFromOverlay,
                         onBack = { pop() },
                     )
@@ -181,6 +266,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     ),
                     vehicleLabel = viewModel.selectedVehicle?.label.orEmpty(),
                     vehiclePlate = viewModel.selectedVehicle?.plate.orEmpty(),
+                    onChangeVehicle = { push(Overlay.Vehicles(choosing = true)) },
                     onNavTap = changePageFromOverlay,
                     onBack = { pop() },
                     onStartParking = { time ->
@@ -206,6 +292,8 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                 is Overlay.Search -> SearchScreen(
                     initialQuery = current.query,
                     parkingLots = viewModel.parkingLots,
+                    nearestParkingLots = viewModel.nearestParkingLots,
+                    hasLocation = viewModel.userLocation != null,
                     onSubmit = { query ->
                         viewModel.search(query)
                         pop()
@@ -219,7 +307,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     MyParkingScreen(
                         currentIndex = 3,
                         onNavTap = changePageFromOverlay,
-                        onEndParking = { viewModel.endParking() },
+                        onEndParking = { push(Overlay.EndParking) },
                         onChangePickupTime = { push(Overlay.ChangePickup) },
                         pickupTime = pickupLabel,
                         pickupIso = viewModel.activeSession?.pickupTime.orEmpty(),
@@ -231,6 +319,10 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         vehiclePlate = viewModel.activeSession?.vehiclePlate
                             ?: viewModel.selectedVehicle?.plate.orEmpty(),
                         onBack = { pop() },
+                        onWaze = { openNavigation(viewModel.activeParking, "Waze") },
+                        onGoogleMaps = {
+                            openNavigation(viewModel.activeParking, "Google Maps")
+                        },
                     )
                 } else {
                     NoActiveParkingScreen(
@@ -254,10 +346,56 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     onBack = { pop() },
                 )
 
-                Overlay.Vehicles -> VehiclesScreen(
+                is Overlay.Vehicles -> VehiclesScreen(
                     vehicles = viewModel.vehicles,
-                    onSelect = { viewModel.selectVehicle(it) },
+                    choosingVehicle = current.choosing,
+                    onUseVehicle = { vehicle ->
+                        viewModel.selectVehicle(vehicle)
+                        if (current.choosing) {
+                            pop()
+                        } else {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "${vehicle.plate} selected for your next parking stay.",
+                                )
+                            }
+                        }
+                    },
+                    onDeleteVehicle = { viewModel.deleteVehicle(it) },
                     onAddVehicle = { push(Overlay.AddVehicle) },
+                    onCheckRestrictions = { push(Overlay.Restrictions) },
+                    onNavTap = changePageFromOverlay,
+                    onBack = { pop() },
+                )
+
+                Overlay.EndParking -> EndParkingScreen(
+                    currentIndex = 3,
+                    busy = viewModel.endingParking,
+                    onConfirm = { viewModel.endParking { closeAll() } },
+                    onNavTap = changePageFromOverlay,
+                    onBack = { pop() },
+                )
+
+                Overlay.Restrictions -> DrivingRestrictionsScreen(
+                    vehicle = viewModel.selectedVehicle,
+                    restriction = viewModel.drivingRestriction,
+                    onOfficialInfo = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse(DrivingRestrictionService.OFFICIAL_URL),
+                                ),
+                            )
+                        }.onFailure {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "Could not open the official website. Please try again.",
+                                )
+                            }
+                        }
+                    },
+                    onChangeVehicle = { push(Overlay.Vehicles(choosing = true)) },
                     onNavTap = changePageFromOverlay,
                     onBack = { pop() },
                 )
@@ -329,7 +467,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     busy = viewModel.authBusy,
                     onNavTap = changePage,
                     onEditProfile = { push(Overlay.EditProfile) },
-                    onMyVehicles = { push(Overlay.Vehicles) },
+                    onMyVehicles = { push(Overlay.Vehicles()) },
                     onMyParking = { push(Overlay.MyParking) },
                     onMyFavorites = { changePage(2) },
                     onSignOut = { viewModel.signOut() },
@@ -337,9 +475,23 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
 
                 else -> HomeScreen(
                     currentIndex = currentIndex,
+                    parkingLots = viewModel.parkingLots,
+                    hasLocationPermission = hasLocationPermission,
+                    onSelectParking = { parking -> push(Overlay.Details(parking)) },
                     onNavTap = changePage,
                     hasActiveParking = viewModel.hasActiveParking,
-                    onOpenMyParking = { currentIndex = 3 },
+                    parkingName = viewModel.activeParking?.name.orEmpty(),
+                    parkingAddress = viewModel.activeParking?.address.orEmpty(),
+                    pickupLabel = pickupLabel,
+                    vehicleLabel = viewModel.activeSession?.let {
+                        if (it.vehicleType == "motorcycle") "Motorcycle" else "Car"
+                    } ?: "Car",
+                    vehiclePlate = viewModel.activeSession?.vehiclePlate
+                        ?: viewModel.selectedVehicle?.plate.orEmpty(),
+                    onOpenMyParking = {
+                        currentIndex = 3
+                        push(Overlay.MyParking)
+                    },
                 )
             }
         }

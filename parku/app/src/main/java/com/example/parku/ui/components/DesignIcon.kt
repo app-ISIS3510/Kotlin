@@ -43,6 +43,9 @@ private fun iconRes(name: String): Int = when (name) {
     "profile_clock" -> R.drawable.ic_profile_clock
     "profile_heart" -> R.drawable.ic_profile_heart
     "profile_chevron" -> R.drawable.ic_profile_chevron
+    "empty_car" -> R.drawable.ic_empty_car
+    "restriction_alert" -> R.drawable.ic_restriction_alert
+    "restriction_check" -> R.drawable.ic_restriction_check
     "user" -> R.drawable.ic_user
     else -> throw IllegalArgumentException("Icono desconocido: $name")
 }

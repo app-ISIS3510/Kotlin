@@ -1,6 +1,5 @@
 package com.example.parku.ui.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,11 +8,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LocationOn
@@ -25,21 +22,39 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.parku.R
+import com.example.parku.data.Parking
+import com.example.parku.data.formatTime12h
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.rememberMarkerState
+
+/** Mismo encuadre inicial que usa home.dart en Flutter. */
+private val CAMPUS = LatLng(4.6030, -74.0660)
 
 @Composable
 fun HomeScreen(
     currentIndex: Int,
+    parkingLots: List<Parking>,
+    hasLocationPermission: Boolean,
+    onSelectParking: (Parking) -> Unit,
     onNavTap: (Int) -> Unit,
     hasActiveParking: Boolean,
+    parkingName: String,
+    parkingAddress: String,
+    pickupLabel: String,
+    vehicleLabel: String,
+    vehiclePlate: String,
     onOpenMyParking: () -> Unit,
 ) {
     Column(
@@ -61,12 +76,37 @@ fun HomeScreen(
 
         // MAPA
         Box(Modifier.weight(1f)) {
-            Image(
-                painter = painterResource(R.drawable.map),
-                contentDescription = null,
+            GoogleMap(
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
+                cameraPositionState = rememberCameraPositionState {
+                    position = CameraPosition.fromLatLngZoom(CAMPUS, 15.5f)
+                },
+                properties = MapProperties(isMyLocationEnabled = hasLocationPermission),
+                uiSettings = MapUiSettings(
+                    myLocationButtonEnabled = false,
+                    zoomControlsEnabled = false,
+                    mapToolbarEnabled = false,
+                ),
+            ) {
+                parkingLots.forEach { parking ->
+                    val latitude = parking.latitude
+                    val longitude = parking.longitude
+                    if (latitude == null || longitude == null) return@forEach
+
+                    Marker(
+                        state = rememberMarkerState(
+                            key = parking.id,
+                            position = LatLng(latitude, longitude),
+                        ),
+                        title = parking.name,
+                        snippet = parking.address,
+                        onInfoWindowClick = {
+                            onSelectParking(parking)
+                            true
+                        },
+                    )
+                }
+            }
 
             // CAJA DE UBICACION
             Row(
@@ -98,25 +138,6 @@ fun HomeScreen(
                     color = AppColors.darkText,
                 )
             }
-
-            // MARCADORES
-            ParkingMarker(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .offset(x = 210.dp, y = 160.dp),
-            )
-
-            ParkingMarker(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = (-100).dp, y = 270.dp),
-            )
-
-            ParkingMarker(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .offset(x = 120.dp, y = 310.dp),
-            )
 
             // TARJETA MY PARKING
             Column(
@@ -163,7 +184,7 @@ fun HomeScreen(
                 } else {
                     // CONTENIDO CON PARQUEO
                     Text(
-                        text = "City U Parking",
+                        text = parkingName,
                         fontFamily = Inter,
                         fontSize = 21.sp,
                         fontWeight = FontWeight.W700,
@@ -171,14 +192,14 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Car ABC123 · Pick up at 4:00 PM",
+                        text = "$vehicleLabel $vehiclePlate · Pick up at ${formatTime12h(pickupLabel)}",
                         fontFamily = Inter,
                         fontSize = 15.sp,
                         color = AppColors.greyText,
                     )
                     Spacer(Modifier.height(5.dp))
                     Text(
-                        text = "Calle 20 · Las Aguas, Bogotá",
+                        text = parkingAddress,
                         fontFamily = Inter,
                         fontSize = 14.sp,
                         color = AppColors.greyText,
@@ -217,20 +238,3 @@ fun HomeScreen(
     }
 }
 
-@Composable
-fun ParkingMarker(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .size(62.dp)
-            .clip(CircleShape)
-            .background(AppColors.white),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.LocationOn,
-            contentDescription = null,
-            tint = AppColors.primary,
-            modifier = Modifier.size(34.dp),
-        )
-    }
-}

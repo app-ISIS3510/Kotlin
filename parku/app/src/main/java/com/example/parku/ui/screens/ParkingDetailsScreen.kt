@@ -46,6 +46,8 @@ fun ParkingDetailsScreen(
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
     onParkHere: () -> Unit,
+    onWaze: () -> Unit,
+    onGoogleMaps: () -> Unit,
     onNavTap: (Int) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -173,7 +175,7 @@ fun ParkingDetailsScreen(
                     text = "Waze",
                     background = AppColors.lightPurple,
                     foreground = AppColors.primary,
-                    onPressed = {},
+                    onPressed = onWaze,
                     modifier = Modifier.weight(1f),
                 )
 
@@ -183,7 +185,7 @@ fun ParkingDetailsScreen(
                     text = "Google Maps",
                     background = AppColors.lightPurple,
                     foreground = AppColors.primary,
-                    onPressed = {},
+                    onPressed = onGoogleMaps,
                     modifier = Modifier.weight(1f),
                 )
             }

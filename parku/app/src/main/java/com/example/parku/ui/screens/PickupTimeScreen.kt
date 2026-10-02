@@ -35,13 +35,13 @@ import com.example.parku.ui.components.PickupTimeSelector
 import com.example.parku.ui.components.ScreenHeader
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
-import kotlinx.coroutines.launch
 
 @Composable
 fun PickupTimeScreen(
     availableTimes: List<String>,
     vehicleLabel: String,
     vehiclePlate: String,
+    onChangeVehicle: () -> Unit,
     onNavTap: (Int) -> Unit,
     onStartParking: (String) -> Unit,
     onBack: () -> Unit,
@@ -130,13 +130,7 @@ fun PickupTimeScreen(
                     text = "Change vehicle",
                     background = AppColors.white,
                     foreground = AppColors.primary,
-                    onPressed = {
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                "Manage your vehicles from your profile",
-                            )
-                        }
-                    },
+                    onPressed = onChangeVehicle,
                 )
             }
 

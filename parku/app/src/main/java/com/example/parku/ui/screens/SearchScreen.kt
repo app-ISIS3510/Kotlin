@@ -37,6 +37,8 @@ import com.example.parku.ui.theme.Inter
 fun SearchScreen(
     initialQuery: String = "",
     parkingLots: List<Parking>,
+    nearestParkingLots: List<Parking>,
+    hasLocation: Boolean,
     onSubmit: (String) -> Unit,
     onNavTap: (Int) -> Unit,
     onBack: () -> Unit,
@@ -53,7 +55,7 @@ fun SearchScreen(
                 it.address.contains(query.trim(), ignoreCase = true)
         }
     } else {
-        parkingLots
+        nearestParkingLots
     }
 
     Column(
@@ -83,7 +85,11 @@ fun SearchScreen(
             Spacer(Modifier.height(16.dp))
 
             SectionCaption(
-                if (typing) "MATCHING PARKING LOTS" else "SUGGESTED PARKING LOTS",
+                when {
+                    typing -> "MATCHING PARKING LOTS"
+                    hasLocation -> "NEAREST PARKING LOTS"
+                    else -> "SUGGESTED PARKING LOTS"
+                },
             )
 
             Spacer(Modifier.height(12.dp))

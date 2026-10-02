@@ -54,11 +54,13 @@ fun MyParkingScreen(
     onChangePickupTime: (() -> Unit)? = null,
     pickupTime: String,
     pickupIso: String,
-    parkingName: String = "City U Parking",
+    parkingName: String,
     parkingAddress: String = "",
     vehicleLabel: String = "Car",
     vehiclePlate: String = "",
     onBack: (() -> Unit)? = null,
+    onWaze: () -> Unit = {},
+    onGoogleMaps: () -> Unit = {},
 ) {
     // Se recalcula cada segundo contra el reloj del dispositivo,
     // como el Timer.periodic de my_parking.dart en Flutter.
@@ -218,7 +220,7 @@ fun MyParkingScreen(
                 Row {
                     SecondaryButton(
                         text = "Waze",
-                        onPressed = {},
+                        onPressed = onWaze,
                         modifier = Modifier.weight(1f),
                     )
 
@@ -226,7 +228,7 @@ fun MyParkingScreen(
 
                     SecondaryButton(
                         text = "Google Maps",
-                        onPressed = {},
+                        onPressed = onGoogleMaps,
                         modifier = Modifier.weight(1f),
                     )
                 }
