@@ -67,6 +67,8 @@ private sealed interface Overlay {
     data object Restrictions : Overlay
 
     data object EndParking : Overlay
+
+    data object Dashboard : Overlay
 }
 
 /**
@@ -368,6 +370,15 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     onBack = { pop() },
                 )
 
+                Overlay.Dashboard -> AnalyticsDashboardScreen(
+                    data = viewModel.dashboard,
+                    loading = viewModel.dashboardLoading,
+                    error = viewModel.dashboardError,
+                    onRetry = { viewModel.loadDashboard() },
+                    onNavTap = changePageFromOverlay,
+                    onBack = { pop() },
+                )
+
                 Overlay.EndParking -> EndParkingScreen(
                     currentIndex = 3,
                     busy = viewModel.endingParking,
@@ -465,11 +476,16 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     fullName = viewModel.userName,
                     email = viewModel.userEmail,
                     busy = viewModel.authBusy,
+                    isAdmin = viewModel.isAdmin,
                     onNavTap = changePage,
                     onEditProfile = { push(Overlay.EditProfile) },
                     onMyVehicles = { push(Overlay.Vehicles()) },
                     onMyParking = { push(Overlay.MyParking) },
                     onMyFavorites = { changePage(2) },
+                    onAnalyticsDashboard = {
+                        viewModel.loadDashboard()
+                        push(Overlay.Dashboard)
+                    },
                     onSignOut = { viewModel.signOut() },
                 )
 

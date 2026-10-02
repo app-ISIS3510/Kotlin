@@ -37,11 +37,13 @@ fun ProfileScreen(
     fullName: String,
     email: String,
     busy: Boolean,
+    isAdmin: Boolean,
     onNavTap: (Int) -> Unit,
     onEditProfile: () -> Unit,
     onMyVehicles: () -> Unit,
     onMyParking: () -> Unit,
     onMyFavorites: () -> Unit,
+    onAnalyticsDashboard: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     Column(
@@ -132,6 +134,17 @@ fun ProfileScreen(
                 subtitle = "Your saved parking lots",
                 onClick = onMyFavorites,
             )
+
+            if (isAdmin) {
+                Spacer(Modifier.height(16.dp))
+
+                MenuRow(
+                    icon = "profile_clock",
+                    title = "Analytics dashboard",
+                    subtitle = "View ParkU business metrics",
+                    onClick = onAnalyticsDashboard,
+                )
+            }
 
             Spacer(Modifier.height(16.dp))
 

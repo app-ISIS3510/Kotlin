@@ -67,6 +67,33 @@ class ParkuViewModel : ViewModel() {
     var authError by mutableStateOf<String?>(null)
         private set
 
+    /** Solo los usuarios listados en app_admins ven el dashboard. */
+    var isAdmin by mutableStateOf(false)
+        private set
+
+    var dashboard by mutableStateOf<DashboardData?>(null)
+        private set
+
+    var dashboardLoading by mutableStateOf(false)
+        private set
+
+    var dashboardError by mutableStateOf<String?>(null)
+        private set
+
+    fun loadDashboard() {
+        viewModelScope.launch {
+            dashboardLoading = true
+            dashboardError = null
+            try {
+                dashboard = DashboardRepository.load()
+            } catch (e: Exception) {
+                dashboardError = e.message ?: "Could not load the dashboard"
+            } finally {
+                dashboardLoading = false
+            }
+        }
+    }
+
     var authBusy by mutableStateOf(false)
         private set
 
@@ -103,6 +130,8 @@ class ParkuViewModel : ViewModel() {
         viewModelScope.launch {
             runCatching { AuthRepository.signOut() }
             isSignedIn = false
+            isAdmin = false
+            dashboard = null
             favorites = emptyList()
             vehicles = emptyList()
             activeSession = null
@@ -203,6 +232,7 @@ class ParkuViewModel : ViewModel() {
                 userEmail = AuthRepository.currentUserEmail().orEmpty()
                 parkingLots = ParkingRepository.getParkingLots()
                 if (isSignedIn) {
+                    isAdmin = AdminRepository.isAdmin()
                     favorites = FavoriteRepository.getFavorites()
                     vehicles = VehicleRepository.getVehicles()
                     loadActiveSession()
