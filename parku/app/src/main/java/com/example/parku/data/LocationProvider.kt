@@ -9,12 +9,7 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-/**
- * Espejo de lib/services/distance_manager.dart.
- *
- * Donde Flutter usa geolocator, aqui se usa el cliente de ubicacion de Google
- * Play Services, que es lo que ese paquete envuelve por debajo en Android.
- */
+
 object LocationProvider {
 
     /** Devuelve (latitud, longitud) o null si no hay permiso o no se pudo leer. */
