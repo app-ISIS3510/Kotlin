@@ -5,12 +5,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
-/**
- * Unico dueno del estado de la app. Sustituye a los datos de ejemplo que antes
- * vivian en ui/data/SampleData.kt: ahora todo sale de Supabase.
- */
 class ParkuViewModel : ViewModel() {
 
     var parkingLots by mutableStateOf<List<Parking>>(emptyList())
@@ -22,14 +20,12 @@ class ParkuViewModel : ViewModel() {
     var activeSession by mutableStateOf<ParkingSession?>(null)
         private set
 
-    /** El parqueadero de la sesion activa, para poder mostrar nombre y direccion. */
     var activeParking by mutableStateOf<Parking?>(null)
         private set
 
     var searchResults by mutableStateOf<List<Parking>>(emptyList())
         private set
 
-    /** Ubicacion del telefono, null mientras no haya permiso o lectura. */
     var userLocation by mutableStateOf<Pair<Double, Double>?>(null)
         private set
 
@@ -37,10 +33,6 @@ class ParkuViewModel : ViewModel() {
         userLocation = location
     }
 
-    /**
-     * Los 4 parqueaderos mas cercanos. Si todavia no hay ubicacion, se devuelve
-     * la lista tal cual para no dejar la busqueda vacia.
-     */
     val nearestParkingLots: List<Parking>
         get() = userLocation?.let { (latitude, longitude) ->
             nearestParkingLots(parkingLots, latitude, longitude)
@@ -67,7 +59,6 @@ class ParkuViewModel : ViewModel() {
     var authError by mutableStateOf<String?>(null)
         private set
 
-    /** Solo los usuarios listados en app_admins ven el dashboard. */
     var isAdmin by mutableStateOf(false)
         private set
 
@@ -99,7 +90,6 @@ class ParkuViewModel : ViewModel() {
 
     val hasActiveParking: Boolean get() = activeSession != null
 
-    /** El vehiculo marcado en el perfil, o el primero que haya. */
     val selectedVehicle: Vehicle? get() = vehicles.firstOrNull { it.isSelected } ?: vehicles.firstOrNull()
 
     fun signIn(email: String, password: String) {
@@ -196,7 +186,6 @@ class ParkuViewModel : ViewModel() {
         }
     }
 
-    /** Pico y placa del vehiculo en uso, o null si no hay ninguno. */
     val drivingRestriction: DrivingRestriction?
         get() = selectedVehicle?.let { DrivingRestrictionService.check(it) }
 
@@ -212,11 +201,9 @@ class ParkuViewModel : ViewModel() {
     }
 
     /**
-     * La primera carga y las siguientes las dispara MainNavigationScreen cuando
-     * la app pasa a primer plano, asi que aqui no se llama en el init: eso
-     * duplicaria la consulta al arrancar.
-     */
-    /**
+     * No se llama en el init: MainNavigationScreen la dispara cuando la app
+     * pasa a primer plano, y hacerlo en los dos sitios duplica la consulta.
+     *
      * @param silent para los refrescos automaticos: no marca cargando ni avisa
      * de errores de red, para no interrumpir mientras la persona usa la app.
      */
@@ -230,12 +217,29 @@ class ParkuViewModel : ViewModel() {
                 isSignedIn = AuthRepository.currentUserId() != null
                 userName = AuthRepository.currentUserName().orEmpty()
                 userEmail = AuthRepository.currentUserEmail().orEmpty()
-                parkingLots = ParkingRepository.getParkingLots()
-                if (isSignedIn) {
-                    isAdmin = AdminRepository.isAdmin()
-                    favorites = FavoriteRepository.getFavorites()
-                    vehicles = VehicleRepository.getVehicles()
-                    loadActiveSession()
+
+                coroutineScope {
+                    // Ninguna depende del resultado de otra: la carga tarda lo
+                    // que la mas lenta y no la suma de todas.
+                    val parkingLotsCall = async { ParkingRepository.getParkingLots() }
+
+                    if (!isSignedIn) {
+                        parkingLots = parkingLotsCall.await()
+                        return@coroutineScope
+                    }
+
+                    val isAdminCall = async { AdminRepository.isAdmin() }
+                    val favoritesCall = async { FavoriteRepository.getFavorites() }
+                    val vehiclesCall = async { VehicleRepository.getVehicles() }
+                    val activeSessionCall = async { loadActiveSession() }
+
+                    // await deja el estado consistente: la pantalla no se dibuja
+                    // con favoritos nuevos y vehiculos viejos.
+                    parkingLots = parkingLotsCall.await()
+                    isAdmin = isAdminCall.await()
+                    favorites = favoritesCall.await()
+                    vehicles = vehiclesCall.await()
+                    activeSessionCall.await()
                 }
             } catch (e: Exception) {
                 if (!silent) errorMessage = e.message ?: "Could not reach the server"
@@ -355,7 +359,6 @@ class ParkuViewModel : ViewModel() {
         }
     }
 
-    /** parking_detail_viewed y navigation_opened, disparados desde la UI. */
     fun trackDetailViewed(parkingId: String) {
         track("parking_detail_viewed", screen = "parking_detail", parkingId = parkingId)
     }
