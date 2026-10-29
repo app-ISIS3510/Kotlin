@@ -239,7 +239,10 @@ class ParkuViewModel : ViewModel() {
                     isAdmin = isAdminCall.await()
                     favorites = favoritesCall.await()
                     vehicles = vehiclesCall.await()
-                    activeSessionCall.await()
+
+                    val (session, parking) = activeSessionCall.await()
+                    activeSession = session
+                    activeParking = parking
                 }
             } catch (e: Exception) {
                 if (!silent) errorMessage = e.message ?: "Could not reach the server"
@@ -249,10 +252,10 @@ class ParkuViewModel : ViewModel() {
         }
     }
 
-    private suspend fun loadActiveSession() {
-        val session = SessionRepository.getActiveSession()
-        activeSession = session
-        activeParking = session?.let { ParkingRepository.getParkingById(it.parkingId) }
+    /** Devuelve el estado en vez de escribirlo: quien llama decide cuando aplicarlo. */
+    private suspend fun loadActiveSession(): Pair<ParkingSession?, Parking?> {
+        val session = SessionRepository.getActiveSession() ?: return null to null
+        return session to ParkingRepository.getParkingById(session.parkingId)
     }
 
     fun isFavorite(parking: Parking): Boolean = favorites.any { it.id == parking.id }
