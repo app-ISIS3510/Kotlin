@@ -219,8 +219,7 @@ class ParkuViewModel : ViewModel() {
                 userEmail = AuthRepository.currentUserEmail().orEmpty()
 
                 coroutineScope {
-                    // Ninguna depende del resultado de otra: la carga tarda lo
-                    // que la mas lenta y no la suma de todas.
+                    // Independent calls: the load costs the slowest one, not the sum.
                     val parkingLotsCall = async { ParkingRepository.getParkingLots() }
 
                     if (!isSignedIn) {
@@ -233,14 +232,19 @@ class ParkuViewModel : ViewModel() {
                     val vehiclesCall = async { VehicleRepository.getVehicles() }
                     val activeSessionCall = async { loadActiveSession() }
 
-                    // await deja el estado consistente: la pantalla no se dibuja
-                    // con favoritos nuevos y vehiculos viejos.
-                    parkingLots = parkingLotsCall.await()
-                    isAdmin = isAdminCall.await()
-                    favorites = favoritesCall.await()
-                    vehicles = vehiclesCall.await()
-
+                    // Await first: assigning between awaits would let Compose
+                    // draw a half-updated screen.
+                    val lots = parkingLotsCall.await()
+                    val admin = isAdminCall.await()
+                    val favorited = favoritesCall.await()
+                    val registered = vehiclesCall.await()
                     val (session, parking) = activeSessionCall.await()
+
+                    // Apply together, with no suspension in between.
+                    parkingLots = lots
+                    isAdmin = admin
+                    favorites = favorited
+                    vehicles = registered
                     activeSession = session
                     activeParking = parking
                 }
@@ -252,7 +256,7 @@ class ParkuViewModel : ViewModel() {
         }
     }
 
-    /** Devuelve el estado en vez de escribirlo: quien llama decide cuando aplicarlo. */
+    /** Returns the state instead of writing it, so the caller decides when to apply it. */
     private suspend fun loadActiveSession(): Pair<ParkingSession?, Parking?> {
         val session = SessionRepository.getActiveSession() ?: return null to null
         return session to ParkingRepository.getParkingById(session.parkingId)
