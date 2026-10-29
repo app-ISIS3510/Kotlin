@@ -7,7 +7,16 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.parku.ui.theme.AppColors
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -77,6 +86,9 @@ private sealed interface Overlay {
 @Composable
 fun AuthGate(viewModel: ParkuViewModel = viewModel()) {
     var showCreateAccount by rememberSaveable { mutableStateOf(false) }
+
+    // Mientras el SDK carga la sesion guardada no se muestra el login por un instante.
+    if (!viewModel.authReady) return
 
     if (viewModel.isSignedIn) {
         MainNavigationScreen(viewModel)
@@ -482,9 +494,25 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     onMyVehicles = { push(Overlay.Vehicles()) },
                     onMyParking = { push(Overlay.MyParking) },
                     onMyFavorites = { changePage(2) },
+                    // El dashboard es el informe compartido de Data Studio (igual que en Flutter).
                     onAnalyticsDashboard = {
-                        viewModel.loadDashboard()
-                        push(Overlay.Dashboard)
+                        if (!viewModel.isOnline) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "The analytics dashboard needs an internet connection.",
+                                )
+                            }
+                        } else {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(ANALYTICS_DASHBOARD_URL)),
+                                )
+                            }.onFailure {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Could not open the dashboard.")
+                                }
+                            }
+                        }
                     },
                     onSignOut = { viewModel.signOut() },
                 )
@@ -512,9 +540,47 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
             }
         }
 
+        if (!viewModel.isOnline) {
+            OfflineBanner(
+                pending = viewModel.pendingCount,
+                lastSyncAt = viewModel.lastSyncAt,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }
+
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
+}
+
+private const val ANALYTICS_DASHBOARD_URL =
+    "https://datastudio.google.com/reporting/bfb7149e-1f1b-44d1-a6c7-37117ca2143a"
+
+/** Aviso fino arriba cuando no hay internet; muestra cuantos cambios esperan. */
+@Composable
+private fun OfflineBanner(pending: Int, lastSyncAt: Long, modifier: Modifier = Modifier) {
+    // Los datos guardados pueden estar viejos: se dice desde cuando.
+    val updated = if (lastSyncAt > 0) {
+        " (updated " + java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date(lastSyncAt)) + ")"
+    } else {
+        ""
+    }
+    val text = if (pending > 0) {
+        "Offline · $pending change${if (pending == 1) "" else "s"} will sync when you're back"
+    } else {
+        "Offline · showing saved data$updated"
+    }
+    Text(
+        text = text,
+        modifier = modifier
+            .fillMaxWidth()
+            .background(AppColors.primary)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        color = Color.White,
+        fontSize = 12.sp,
+        textAlign = TextAlign.Center,
+    )
 }
