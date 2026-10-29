@@ -118,6 +118,14 @@ private fun shortEventName(event: String): String = when (event) {
     else -> event
 }
 
+private fun screenLabel(screen: String): String = when (screen) {
+    "parking_list" -> "Parking list"
+    "vehicles" -> "Vehicles"
+    "my_parking" -> "My parking"
+    "analytics_dashboard" -> "Dashboard"
+    else -> screen
+}
+
 @Composable
 private fun DashboardContent(data: DashboardData) {
     DashboardCard(
@@ -191,6 +199,45 @@ private fun DashboardContent(data: DashboardData) {
     ) {
         SlotList(
             slots = data.bq6.map { Triple(it.timeSlot, it.parkingName, it.parkingStarts) },
+        )
+    }
+
+    Spacer(Modifier.height(18.dp))
+
+    // Sprint 3: BQ2 de la lista del Sprint 1 (tiempo de carga por pantalla y dispositivo).
+    DashboardCard(
+        title = "Slowest screens by device",
+        subtitle = "Average load time in ms (network)",
+    ) {
+        RankedList(
+            data = data.loadTimes
+                .filter { it.avgNetworkMs != null }
+                .take(8)
+                .map {
+                    BarDatum(
+                        "${screenLabel(it.screen)} · ${it.deviceModel} · ${it.osVersion}",
+                        it.avgNetworkMs ?: 0,
+                    )
+                },
+        )
+    }
+
+    Spacer(Modifier.height(18.dp))
+
+    DashboardCard(
+        title = "Cache effect on load time",
+        subtitle = "Average load time in ms (from local cache)",
+    ) {
+        RankedList(
+            data = data.loadTimes
+                .filter { it.avgCachedMs != null }
+                .take(8)
+                .map {
+                    BarDatum(
+                        "${screenLabel(it.screen)} · ${it.deviceModel}",
+                        it.avgCachedMs ?: 0,
+                    )
+                },
         )
     }
 }

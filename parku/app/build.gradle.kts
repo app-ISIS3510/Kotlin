@@ -64,6 +64,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
+    // Sprint 3: almacenamiento local (cache y cola offline)
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-tooling-preview")
 }

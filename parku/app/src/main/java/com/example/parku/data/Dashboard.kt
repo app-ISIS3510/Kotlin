@@ -46,6 +46,20 @@ data class Bq6Row(
     @SerialName("parking_starts") val parkingStarts: Int,
 )
 
+/**
+ * Sprint 3, BQ2 de la lista del Sprint 1: pantallas con mayor tiempo de carga,
+ * segmentadas por modelo de telefono y version de Android.
+ */
+@Serializable
+data class LoadTimeRow(
+    val screen: String,
+    @SerialName("device_model") val deviceModel: String,
+    @SerialName("os_version") val osVersion: String,
+    @SerialName("avg_network_ms") val avgNetworkMs: Int? = null,
+    @SerialName("avg_cached_ms") val avgCachedMs: Int? = null,
+    val samples: Int = 0,
+)
+
 /** Todo lo que pinta el dashboard, en una sola carga. */
 data class DashboardData(
     val bq1: List<Bq1Row> = emptyList(),
@@ -54,6 +68,7 @@ data class DashboardData(
     val bq4: Int = 0,
     val bq5: List<Bq5Row> = emptyList(),
     val bq6: List<Bq6Row> = emptyList(),
+    val loadTimes: List<LoadTimeRow> = emptyList(),
 )
 
 object DashboardRepository {
@@ -70,6 +85,10 @@ object DashboardRepository {
             ?: 0,
         bq5 = supabase.from("bq5_action_usage_last_7_days").select().decodeList(),
         bq6 = supabase.from("bq6_top_parking_by_2h_slot_last_30_days").select().decodeList(),
+        // Si la vista todavia no existe en Supabase, el resto del dashboard sigue funcionando.
+        loadTimes = runCatching {
+            supabase.from("bq2_slowest_screens_by_device").select().decodeList<LoadTimeRow>()
+        }.getOrDefault(emptyList()),
     )
 }
 
