@@ -307,7 +307,6 @@ object VehicleRepository {
     }
 }
 
-/** Espejo de lib/repositories/analytics_repository.dart. */
 object AnalyticsRepository {
 
     suspend fun trackEvent(
@@ -315,8 +314,14 @@ object AnalyticsRepository {
         screen: String? = null,
         parkingId: String? = null,
     ) {
+        // La politica RLS de analytics_events exige auth.uid() = user_id y la
+        // columna no tiene valor por defecto: si no se envia, el insert se
+        // rechaza. Sin sesion no hay nada que registrar.
+        val uid = userId ?: return
+
         supabase.from("analytics_events").insert(
             buildJsonObject {
+                put("user_id", uid)
                 put("event_type", eventType)
                 put("screen", screen)
                 put("parking_id", parkingId)
