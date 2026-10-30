@@ -11,6 +11,8 @@ object PendingSync {
     suspend fun run(op: PendingOp) {
         when (op.type) {
             OP_TRACK -> AnalyticsRepository.trackEvent(op.eventType!!, op.screen, op.parkingId, op.metadata)
+            OP_FAVORITE_ADD -> FavoriteRepository.addFavorite(op.parkingId!!)
+            OP_FAVORITE_REMOVE -> FavoriteRepository.removeFavorite(op.parkingId!!)
         }
     }
 }

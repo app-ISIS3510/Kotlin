@@ -521,6 +521,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     currentIndex = currentIndex,
                     parkingLots = viewModel.parkingLots,
                     hasLocationPermission = hasLocationPermission,
+                    isOnline = viewModel.isOnline,
                     onSelectParking = { parking -> push(Overlay.Details(parking)) },
                     onNavTap = changePage,
                     hasActiveParking = viewModel.hasActiveParking,

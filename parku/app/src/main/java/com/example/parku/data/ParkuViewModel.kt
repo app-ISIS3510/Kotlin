@@ -177,6 +177,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching { AuthRepository.signOut() }
             store.clearUserData()
+            catalog.clear()
             pendingCount = 0
             isSignedIn = false
             isAdmin = false
@@ -322,15 +323,12 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                         if (signedIn) timed("my_parking", record) { fetchActiveSession() } else null
                     }
 
-                    // Await first: assigning between awaits would let Compose
-                    // draw a half-updated screen.
                     val freshLots = lots.await()
                     val freshAdmin = admin.await()
                     val freshFavorites = favs.await()
                     val freshVehicles = vehs.await()
                     val freshSession = sess.await()
 
-                    // Apply together, with no suspension in between.
                     parkingLots = freshLots
                     freshLots.forEach { parkingMemoryCache.put(it.id, it) }
                     if (signedIn) {
@@ -424,33 +422,61 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            try {
-                if (wasFavorite) {
-                    FavoriteRepository.removeFavorite(parking.id)
-                    track("favorite_removed", screen = "favorites", parkingId = parking.id)
-                } else {
-                    FavoriteRepository.addFavorite(parking.id)
-                    track("favorite_added", screen = "parking_details", parkingId = parking.id)
+            if (wasFavorite) catalog.removeFavorite(parking.id) else catalog.addFavorite(parking)
+
+            val op = newOp(
+                if (wasFavorite) OP_FAVORITE_REMOVE else OP_FAVORITE_ADD,
+                parkingId = parking.id,
+            )
+
+            if (isOnline) {
+                try {
+                    withContext(Dispatchers.IO) { PendingSync.run(op) }
+                    trackFavorite(wasFavorite, parking.id)
+                    adoptServerFavorites()
+                    return@launch
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    if (!isNetworkFailure(e)) {
+                        errorMessage = e.message ?: "Could not update favorites"
+                        adoptServerFavorites()
+                        return@launch
+                    }
                 }
-                favorites = FavoriteRepository.getFavorites()
-            } catch (e: Exception) {
-                errorMessage = e.message ?: "Could not update favorites"
-                favorites = runCatching { FavoriteRepository.getFavorites() }.getOrDefault(favorites)
             }
+
+            enqueue(op)
+            trackFavorite(wasFavorite, parking.id)
         }
+    }
+
+    private fun trackFavorite(wasFavorite: Boolean, parkingId: String) {
+        if (wasFavorite) {
+            track("favorite_removed", screen = "favorites", parkingId = parkingId)
+        } else {
+            track("favorite_added", screen = "parking_details", parkingId = parkingId)
+        }
+    }
+
+    private suspend fun adoptServerFavorites() {
+        val fresh = runCatching { FavoriteRepository.getFavorites() }.getOrNull() ?: return
+        favorites = fresh
+        catalog.saveFavorites(fresh)
     }
 
     fun search(query: String) {
         viewModelScope.launch {
-            if (!isOnline) {
-                searchResults = catalog.search(query)
+            val cached = catalog.search(query)
+            if (cached.isNotEmpty() || !isOnline) {
+                searchResults = cached
                 return@launch
             }
             try {
                 searchResults = ParkingRepository.searchParkingLots(query)
             } catch (e: Exception) {
-                searchResults = catalog.search(query)
-                if (searchResults.isEmpty()) errorMessage = e.message ?: "Search failed"
+                if (e is CancellationException) throw e
+                errorMessage = e.message ?: "Search failed"
+                searchResults = emptyList()
             }
         }
     }

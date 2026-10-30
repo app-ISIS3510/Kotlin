@@ -55,6 +55,8 @@ data class PerfSample(
 )
 
 const val OP_TRACK = "track"
+const val OP_FAVORITE_ADD = "favorite_add"
+const val OP_FAVORITE_REMOVE = "favorite_remove"
 
 /**
  * Almacenamiento local, con dos de las estrategias de la wiki:

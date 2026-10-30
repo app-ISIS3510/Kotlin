@@ -316,9 +316,6 @@ object AnalyticsRepository {
         parkingId: String? = null,
         metadata: JsonObject? = null,
     ) {
-        // La politica RLS de analytics_events exige auth.uid() = user_id y la
-        // columna no tiene valor por defecto: si no se envia, el insert se
-        // rechaza. Sin sesion no hay nada que registrar.
         val uid = userId ?: return
 
         supabase.from("analytics_events").insert(
