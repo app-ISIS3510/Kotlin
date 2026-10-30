@@ -43,7 +43,7 @@ fun PickupTimeScreen(
     vehiclePlate: String,
     onChangeVehicle: () -> Unit,
     onNavTap: (Int) -> Unit,
-    onStartParking: (String) -> Unit,
+    onStartParking: (String, Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     // Solo cambia la maqueta; no se guarda en un servidor.
@@ -157,7 +157,9 @@ fun PickupTimeScreen(
 
             PickupButton(
                 text = "Start parking",
-                onPressed = { selectedTime?.let(onStartParking) },
+                onPressed = {
+                    selectedTime?.let { onStartParking(it, it == availableTimes.firstOrNull()) }
+                },
             )
 
             Spacer(Modifier.height(16.dp))

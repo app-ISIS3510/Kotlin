@@ -10,7 +10,7 @@ object PendingSync {
 
     suspend fun run(op: PendingOp) {
         when (op.type) {
-            OP_TRACK -> AnalyticsRepository.trackEvent(op.eventType!!, op.screen, op.parkingId)
+            OP_TRACK -> AnalyticsRepository.trackEvent(op.eventType!!, op.screen, op.parkingId, op.metadata)
         }
     }
 }

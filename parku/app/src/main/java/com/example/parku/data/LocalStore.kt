@@ -14,6 +14,7 @@ import java.io.File
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 private val Context.parkuDataStore by preferencesDataStore(name = "parku_prefs")
 
@@ -38,6 +39,7 @@ data class PendingOp(
     val eventType: String? = null,
     val screen: String? = null,
     val parkingId: String? = null,
+    val metadata: JsonObject? = null,
     val attempts: Int = 0,
 )
 

@@ -17,6 +17,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.example.parku.data.local.ParkingCatalog
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.util.UUID
 
 /**
@@ -26,6 +30,7 @@ import java.util.UUID
 class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     private val store = LocalStore(application)
+    private val catalog = ParkingCatalog(application)
     private val connectivity = ConnectivityObserver(application)
     private val syncMutex = Mutex()
 
@@ -317,13 +322,20 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                         if (signedIn) timed("my_parking", record) { fetchActiveSession() } else null
                     }
 
-                    parkingLots = lots.await()
-                    parkingLots.forEach { parkingMemoryCache.put(it.id, it) }
+                    // Await first: assigning between awaits would let Compose
+                    // draw a half-updated screen.
+                    val freshLots = lots.await()
+                    val freshAdmin = admin.await()
+                    val freshFavorites = favs.await()
+                    val freshVehicles = vehs.await()
+                    val freshSession = sess.await()
+
+                    // Apply together, with no suspension in between.
+                    parkingLots = freshLots
+                    freshLots.forEach { parkingMemoryCache.put(it.id, it) }
                     if (signedIn) {
-                        isAdmin = admin.await()
-                        favorites = favs.await()
-                        val freshVehicles = vehs.await()
-                        val freshSession = sess.await()
+                        isAdmin = freshAdmin
+                        favorites = freshFavorites
                         if (!hasPending) {
                             vehicles = freshVehicles
                             activeSession = freshSession?.first
@@ -363,6 +375,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             if (userEmail.isBlank()) userEmail = it.email
         }
         timed("parking_list", fromCache = true) { store.parkingLots() }?.let { parkingLots = it }
+        catalog.favorites().takeIf { it.isNotEmpty() }?.let { favorites = it }
         timed("vehicles", fromCache = true) { store.vehicles() }?.let { vehicles = it }
         timed("my_parking", fromCache = true) { store.session() }?.let {
             activeSession = it.session
@@ -375,6 +388,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         store.saveOwner(uid)
         store.saveProfile(CachedProfile(userName, userEmail))
         store.saveParkingLots(parkingLots)
+        catalog.saveParkingLots(parkingLots)
+        catalog.saveFavorites(favorites)
         store.saveVehicles(vehicles)
         store.saveSession(activeSession?.let { CachedSession(it, activeParking) })
         lastSyncAt = System.currentTimeMillis()
@@ -427,16 +442,25 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     fun search(query: String) {
         viewModelScope.launch {
+            if (!isOnline) {
+                searchResults = catalog.search(query)
+                return@launch
+            }
             try {
                 searchResults = ParkingRepository.searchParkingLots(query)
             } catch (e: Exception) {
-                errorMessage = e.message ?: "Search failed"
-                searchResults = emptyList()
+                searchResults = catalog.search(query)
+                if (searchResults.isEmpty()) errorMessage = e.message ?: "Search failed"
             }
         }
     }
 
-    fun startParking(parking: Parking, pickupLabel: String, onDone: () -> Unit = {}) {
+    fun startParking(
+        parking: Parking,
+        pickupLabel: String,
+        usedSuggestedTime: Boolean,
+        onDone: () -> Unit = {},
+    ) {
         val vehicle = selectedVehicle
         if (vehicle == null) {
             errorMessage = "Add a vehicle before starting a parking session"
@@ -463,6 +487,15 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 activeParking = parking
                 persistSession()
                 track("parking_started", screen = "pickup_time", parkingId = parking.id)
+                track(
+                    "parking_pickup_choice",
+                    screen = "pickup_time",
+                    parkingId = parking.id,
+                    metadata = buildJsonObject {
+                        put("session_id", session.id)
+                        put("pickup_selection", if (usedSuggestedTime) "suggested" else "manual")
+                    },
+                )
                 onDone()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -554,9 +587,20 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
      * La analitica nunca debe tumbar la pantalla. Sin red, el evento se guarda en
      * la cola y se envia al volver la conexion, para no perder datos de las BQs.
      */
-    private fun track(eventType: String, screen: String?, parkingId: String?) {
+    private fun track(
+        eventType: String,
+        screen: String?,
+        parkingId: String?,
+        metadata: JsonObject? = null,
+    ) {
         viewModelScope.launch {
-            val op = newOp(OP_TRACK, eventType = eventType, screen = screen, parkingId = parkingId)
+            val op = newOp(
+                OP_TRACK,
+                eventType = eventType,
+                screen = screen,
+                parkingId = parkingId,
+                metadata = metadata,
+            )
             if (isOnline) {
                 try {
                     withContext(Dispatchers.IO) { PendingSync.run(op) }
@@ -582,6 +626,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         eventType: String? = null,
         screen: String? = null,
         parkingId: String? = null,
+        metadata: JsonObject? = null,
     ) = PendingOp(
         id = UUID.randomUUID().toString(),
         type = type,
@@ -593,6 +638,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         eventType = eventType,
         screen = screen,
         parkingId = parkingId,
+        metadata = metadata,
     )
 
     private suspend fun enqueue(op: PendingOp) {

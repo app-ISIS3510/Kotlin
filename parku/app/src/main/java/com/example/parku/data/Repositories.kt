@@ -8,6 +8,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -313,6 +314,7 @@ object AnalyticsRepository {
         eventType: String,
         screen: String? = null,
         parkingId: String? = null,
+        metadata: JsonObject? = null,
     ) {
         // La politica RLS de analytics_events exige auth.uid() = user_id y la
         // columna no tiene valor por defecto: si no se envia, el insert se
@@ -325,6 +327,7 @@ object AnalyticsRepository {
                 put("event_type", eventType)
                 put("screen", screen)
                 put("parking_id", parkingId)
+                if (metadata != null) put("metadata", metadata)
             },
         )
     }
