@@ -1,6 +1,7 @@
 package com.example.parku.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,6 +48,7 @@ fun HomeScreen(
     currentIndex: Int,
     parkingLots: List<Parking>,
     hasLocationPermission: Boolean,
+    isOnline: Boolean,
     onSelectParking: (Parking) -> Unit,
     onNavTap: (Int) -> Unit,
     hasActiveParking: Boolean,
@@ -104,6 +106,37 @@ fun HomeScreen(
                             onSelectParking(parking)
                             true
                         },
+                    )
+                }
+            }
+
+            // OFFLINE NOTICE
+            if (!isOnline) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 104.dp, start = 30.dp, end = 30.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(AppColors.white)
+                        .clickable { onNavTap(1) }
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Map data may be outdated",
+                        modifier = Modifier.weight(1f),
+                        fontFamily = Inter,
+                        fontSize = 14.sp,
+                        color = AppColors.darkText,
+                    )
+
+                    Text(
+                        text = "See parking lots",
+                        fontFamily = Inter,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.W600,
+                        color = AppColors.primary,
                     )
                 }
             }
