@@ -283,8 +283,8 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     onChangeVehicle = { push(Overlay.Vehicles(choosing = true)) },
                     onNavTap = changePageFromOverlay,
                     onBack = { pop() },
-                    onStartParking = { time ->
-                        viewModel.startParking(current.parking, time) {
+                    onStartParking = { time, usedSuggested ->
+                        viewModel.startParking(current.parking, time, usedSuggested) {
                             closeAll()
                             currentIndex = 3
                             push(Overlay.MyParking)
