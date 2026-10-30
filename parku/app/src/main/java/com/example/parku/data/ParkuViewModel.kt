@@ -27,7 +27,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     private val store = LocalStore(application)
     private val connectivity = ConnectivityObserver(application)
-x    private val syncMutex = Mutex()
+    private val syncMutex = Mutex()
 
     /** Estado de la red, para el aviso de "sin conexion". */
     var isOnline by mutableStateOf(connectivity.online.value)
