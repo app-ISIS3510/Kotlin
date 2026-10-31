@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -90,12 +91,32 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateUserLocation(location: Pair<Double, Double>?) {
         userLocation = location
+        updateNearest()
     }
 
-    val nearestParkingLots: List<Parking>
-        get() = userLocation?.let { (latitude, longitude) ->
-            nearestParkingLots(parkingLots, latitude, longitude)
-        } ?: parkingLots
+    var nearestParkingLots by mutableStateOf<List<Parking>>(emptyList())
+        private set
+
+    private var nearestJob: Job? = null
+
+    /**
+     * Ordenar por distancia es puro calculo, asi que va en Dispatchers.Default y no
+     * en el hilo principal. Antes se recalculaba en cada recomposicion de la pantalla.
+     */
+    private fun updateNearest() {
+        val lots = parkingLots
+        val location = userLocation
+        nearestJob?.cancel()
+        if (location == null) {
+            nearestParkingLots = lots
+            return
+        }
+        nearestJob = viewModelScope.launch {
+            nearestParkingLots = withContext(Dispatchers.Default) {
+                nearestParkingLots(lots, location.first, location.second)
+            }
+        }
+    }
 
     var isLoading by mutableStateOf(false)
         private set
@@ -374,6 +395,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                     val freshSession = sess.await()
 
                     parkingLots = freshLots
+                    updateNearest()
                     freshLots.forEach { parkingMemoryCache.put(it.id, it) }
                     markAvailabilityChecked(freshLots)
                     if (signedIn) {
@@ -422,7 +444,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             if (userName.isBlank()) userName = it.name
             if (userEmail.isBlank()) userEmail = it.email
         }
-        timed("parking_list", fromCache = true) { store.parkingLots() }?.let { parkingLots = it }
+        timed("parking_list", fromCache = true) { store.parkingLots() }?.let {
+            parkingLots = it
+            updateNearest()
+        }
         catalog.favorites().takeIf { it.isNotEmpty() }?.let { favorites = it }
         timed("vehicles", fromCache = true) { store.vehicles() }?.let { vehicles = it }
         timed("my_parking", fromCache = true) { store.session() }?.let {

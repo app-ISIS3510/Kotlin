@@ -101,19 +101,31 @@ class LocalStore(context: Context) {
     }
 
     private inline fun <reified T> writeRaw(name: String, value: T) {
+        writeText(name, json.encodeToString(value))
+    }
+
+    private fun writeText(name: String, text: String) {
         val tmp = File(dir, "$name.tmp")
-        tmp.writeText(json.encodeToString(value))
+        tmp.writeText(text)
         if (!tmp.renameTo(File(dir, name))) {
             File(dir, name).delete()
             tmp.renameTo(File(dir, name))
         }
     }
 
-    private suspend inline fun <reified T> read(name: String): T? =
-        withContext(Dispatchers.IO) { fileMutex.withLock { readRaw<T>(name) } }
+    // Leer y escribir el archivo va en IO; convertir el JSON es calculo, asi que va en Default.
+    private suspend inline fun <reified T> read(name: String): T? {
+        val text = withContext(Dispatchers.IO) {
+            fileMutex.withLock { File(dir, name).takeIf { it.exists() }?.readText() }
+        } ?: return null
+        return withContext(Dispatchers.Default) {
+            runCatching { json.decodeFromString<T>(text) }.getOrNull()
+        }
+    }
 
     private suspend inline fun <reified T> write(name: String, value: T) {
-        withContext(Dispatchers.IO) { fileMutex.withLock { writeRaw(name, value) } }
+        val text = withContext(Dispatchers.Default) { json.encodeToString(value) }
+        withContext(Dispatchers.IO) { fileMutex.withLock { writeText(name, text) } }
     }
 
     // --- Preferences (DataStore) -------------------------------------------
