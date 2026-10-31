@@ -1,6 +1,7 @@
 package com.example.parku.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,12 +35,24 @@ fun ParkingCard(
     type: String,
     modifier: Modifier = Modifier,
     onTap: (() -> Unit)? = null,
+    recommended: Boolean = false,
+    distance: String? = null,
+    availabilityLabel: String? = null,
+    availabilityRatio: Float? = null,
+    spacesLabel: String? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(AppColors.white)
+            .then(
+                if (recommended) {
+                    Modifier.border(2.dp, AppColors.primary, RoundedCornerShape(20.dp))
+                } else {
+                    Modifier
+                },
+            )
             .then(if (onTap != null) Modifier.clickable { onTap() } else Modifier)
             .padding(18.dp),
         verticalAlignment = Alignment.Top,
@@ -64,6 +78,22 @@ fun ParkingCard(
 
         // TEXT
         Column(Modifier.weight(1f)) {
+            if (recommended) {
+                Text(
+                    text = "★ Recommended",
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(AppColors.lightPurple)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    fontFamily = Inter,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.W700,
+                    color = AppColors.primary,
+                )
+
+                Spacer(Modifier.height(8.dp))
+            }
+
             Text(
                 text = name,
                 fontFamily = Inter,
@@ -89,6 +119,54 @@ fun ParkingCard(
                 fontSize = 14.sp,
                 color = AppColors.greyText,
             )
+
+            if (distance != null) {
+                Spacer(Modifier.height(5.dp))
+
+                Text(
+                    text = distance,
+                    fontFamily = Inter,
+                    fontSize = 14.sp,
+                    color = AppColors.darkText,
+                )
+            }
+
+            if (availabilityLabel != null) {
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = availabilityLabel,
+                    fontFamily = Inter,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.W700,
+                    color = AppColors.primary,
+                )
+            }
+
+            if (availabilityRatio != null) {
+                Spacer(Modifier.height(6.dp))
+
+                LinearProgressIndicator(
+                    progress = { availabilityRatio.coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = AppColors.primary,
+                    trackColor = AppColors.lightPurple,
+                )
+            }
+
+            if (spacesLabel != null) {
+                Spacer(Modifier.height(6.dp))
+
+                Text(
+                    text = spacesLabel,
+                    fontFamily = Inter,
+                    fontSize = 12.sp,
+                    color = AppColors.greyText,
+                )
+            }
         }
 
         Icon(

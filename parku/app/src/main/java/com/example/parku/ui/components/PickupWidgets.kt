@@ -79,9 +79,11 @@ fun PickupButton(
     background: Color = AppColors.primary,
     foreground: Color = AppColors.white,
     height: Dp = 52.dp,
+    enabled: Boolean = true,
 ) {
     Button(
         onClick = onPressed,
+        enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
             .height(height),
@@ -89,6 +91,8 @@ fun PickupButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = background,
             contentColor = foreground,
+            disabledContainerColor = AppColors.lightPurple,
+            disabledContentColor = AppColors.greyText,
         ),
         elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp),
         contentPadding = PaddingValues(horizontal = 16.dp),

@@ -1,8 +1,13 @@
 package com.example.parku.data
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationManager
+import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -12,7 +17,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 
 object LocationProvider {
 
-    /** Devuelve (latitud, longitud) o null si no hay permiso o no se pudo leer. */
     @SuppressLint("MissingPermission")
     suspend fun currentLocation(context: Context): Pair<Double, Double>? =
         suspendCancellableCoroutine { continuation ->
@@ -30,7 +34,23 @@ object LocationProvider {
             continuation.invokeOnCancellation { cancellation.cancel() }
         }
 
-    /** Metros entre dos puntos, igual que Geolocator.distanceBetween. */
+    fun failureReason(context: Context): String {
+        val granted = listOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        ).any {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
+        if (!granted) return "Location permission is off."
+
+        val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        if (manager == null || !LocationManagerCompat.isLocationEnabled(manager)) {
+            return "Location services are off."
+        }
+
+        return "Could not get your location."
+    }
+
     fun distanceBetween(
         fromLatitude: Double,
         fromLongitude: Double,
@@ -43,10 +63,6 @@ object LocationProvider {
     }
 }
 
-/**
- * Los parqueaderos con coordenadas, ordenados del mas cercano al mas lejano.
- * Espejo de ParkingService.getNearestParkingLots.
- */
 fun nearestParkingLots(
     parkingLots: List<Parking>,
     userLatitude: Double,

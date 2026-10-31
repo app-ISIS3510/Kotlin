@@ -75,14 +75,44 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     var userLocation by mutableStateOf<Pair<Double, Double>?>(null)
         private set
 
+    var locationNotice by mutableStateOf<String?>(null)
+        private set
+
     fun updateUserLocation(location: Pair<Double, Double>?) {
         userLocation = location
+        locationNotice = if (location == null) {
+            LocationProvider.failureReason(getApplication())
+        } else {
+            null
+        }
     }
 
     val nearestParkingLots: List<Parking>
         get() = userLocation?.let { (latitude, longitude) ->
             nearestParkingLots(parkingLots, latitude, longitude)
         } ?: parkingLots
+
+    var smartVehicleType by mutableStateOf(SmartVehicleType.CAR)
+        private set
+
+    var smartRadiusMeters by mutableStateOf(SMART_RADIUS_OPTIONS[1])
+        private set
+
+    fun selectSmartVehicleType(type: SmartVehicleType) {
+        smartVehicleType = type
+    }
+
+    fun selectSmartRadius(meters: Int) {
+        smartRadiusMeters = meters
+    }
+
+    val smartParking: SmartParkingResults
+        get() = smartParkingResults(
+            parkingLots = parkingLots,
+            userLocation = userLocation,
+            radiusMeters = smartRadiusMeters,
+            vehicleType = smartVehicleType,
+        )
 
     var isLoading by mutableStateOf(false)
         private set
@@ -131,7 +161,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 dashboard = timed("analytics_dashboard") { DashboardRepository.load() }
             } catch (e: Exception) {
-                dashboardError = e.message ?: "Could not load the dashboard"
+                dashboardError = reason(e, "Could not load the dashboard.")
             } finally {
                 dashboardLoading = false
             }
@@ -166,7 +196,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 isSignedIn = AuthRepository.currentUserId() != null
                 if (isSignedIn) refresh()
             } catch (e: Exception) {
-                authError = e.message ?: "Could not sign in"
+                authError = reason(e, "Could not sign in.")
             } finally {
                 authBusy = false
             }
@@ -210,7 +240,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                     },
                 )
             } catch (e: Exception) {
-                errorMessage = e.message ?: "Could not update the profile"
+                errorMessage = reason(e, "Could not update the profile.")
             } finally {
                 authBusy = false
             }
@@ -218,6 +248,12 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Matriz de la wiki, "Network only": lo que escribe en el servidor no se confirma sin red. */
+    private fun reason(error: Throwable, fallback: String): String {
+        if (isNetworkFailure(error)) return "No internet connection."
+        val first = error.message?.lineSequence()?.firstOrNull()?.trim()
+        return if (first.isNullOrEmpty() || first.length > 90) fallback else first
+    }
+
     private fun requireConnection(action: String): Boolean {
         if (isOnline) return true
         errorMessage = "You need an internet connection to $action."
@@ -239,7 +275,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 onDone()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                errorMessage = e.message ?: "Could not add the vehicle"
+                errorMessage = reason(e, "Could not add the vehicle.")
             }
         }
     }
@@ -254,7 +290,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 onDone()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                errorMessage = e.message ?: "Could not delete the vehicle"
+                errorMessage = reason(e, "Could not delete the vehicle.")
             }
         }
     }
@@ -271,7 +307,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 reloadVehicles()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                errorMessage = e.message ?: "Could not change the vehicle"
+                errorMessage = reason(e, "Could not change the vehicle.")
             }
         }
     }
@@ -344,7 +380,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 persistAll()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                if (!silent) errorMessage = e.message ?: "Could not reach the server"
+                if (!silent) errorMessage = reason(e, "Could not reach the server.")
             } finally {
                 if (!silent) isLoading = false
             }
@@ -438,7 +474,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     if (!isNetworkFailure(e)) {
-                        errorMessage = e.message ?: "Could not update favorites"
+                        errorMessage = reason(e, "Could not update favorites.")
                         adoptServerFavorites()
                         return@launch
                     }
@@ -475,7 +511,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 searchResults = ParkingRepository.searchParkingLots(query)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                errorMessage = e.message ?: "Search failed"
+                errorMessage = reason(e, "Search failed.")
                 searchResults = emptyList()
             }
         }
@@ -489,7 +525,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val vehicle = selectedVehicle
         if (vehicle == null) {
-            errorMessage = "Add a vehicle before starting a parking session"
+            errorMessage = "Add a vehicle before starting a parking session."
             return
         }
         // La disponibilidad se valida en el servidor (RPC), asi que aqui si hace falta red.
@@ -519,6 +555,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                     parkingId = parking.id,
                     metadata = buildJsonObject {
                         put("session_id", session.id)
+                        put("platform", "kotlin")
                         put("pickup_selection", if (usedSuggestedTime) "suggested" else "manual")
                     },
                 )
@@ -529,7 +566,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 errorMessage = if (isNetworkFailure(e)) {
                     "Connection lost. Your parking session is not confirmed. Please try again."
                 } else {
-                    e.message ?: "Could not start parking"
+                    reason(e, "Could not start parking.")
                 }
             }
         }
@@ -561,7 +598,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 errorMessage = if (isNetworkFailure(e)) {
                     "Connection lost. Your new pickup time was not saved."
                 } else {
-                    e.message ?: "Could not update the pickup time"
+                    reason(e, "Could not update the pickup time.")
                 }
             }
         }
@@ -589,7 +626,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 errorMessage = if (isNetworkFailure(e)) {
                     "Connection lost. Your session is still active until the server confirms it ended."
                 } else {
-                    e.message ?: "Could not end parking"
+                    reason(e, "Could not end parking.")
                 }
             } finally {
                 endingParking = false
