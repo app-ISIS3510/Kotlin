@@ -223,7 +223,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
     Box(Modifier.fillMaxSize()) {
         // Abre Waze o Google Maps, con los mismos avisos que usa Flutter cuando
     // el parqueadero no tiene coordenadas o no hay app que atienda el enlace.
-    fun openNavigation(parking: Parking?, app: String) {
+    fun openNavigation(parking: Parking?, app: String, screen: String) {
         val latitude = parking?.latitude
         val longitude = parking?.longitude
 
@@ -243,7 +243,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
         val parkingId = parking.id
 
         fun openApp() {
-            viewModel.trackNavigationOpened(parkingId)
+            viewModel.trackNavigationOpened(parkingId, screen)
             viewModel.savePreferredNavApp(app)
 
             runCatching {
@@ -293,8 +293,8 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         preferredNavApp = viewModel.preferredNavApp,
                         onToggleFavorite = { viewModel.toggleFavorite(parking) },
                         onParkHere = { push(Overlay.Pickup(parking)) },
-                        onWaze = { openNavigation(parking, "Waze") },
-                        onGoogleMaps = { openNavigation(parking, "Google Maps") },
+                        onWaze = { openNavigation(parking, "Waze", "parking_detail") },
+                        onGoogleMaps = { openNavigation(parking, "Google Maps", "parking_detail") },
                         onNavTap = changePageFromOverlay,
                         onBack = { pop() },
                     )
@@ -366,9 +366,9 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         vehiclePlate = viewModel.activeSession?.vehiclePlate
                             ?: viewModel.selectedVehicle?.plate.orEmpty(),
                         onBack = { pop() },
-                        onWaze = { openNavigation(viewModel.activeParking, "Waze") },
+                        onWaze = { openNavigation(viewModel.activeParking, "Waze", "my_parking") },
                         onGoogleMaps = {
-                            openNavigation(viewModel.activeParking, "Google Maps")
+                            openNavigation(viewModel.activeParking, "Google Maps", "my_parking")
                         },
                     )
                 } else {

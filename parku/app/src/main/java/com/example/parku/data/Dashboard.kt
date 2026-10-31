@@ -60,6 +60,18 @@ data class LoadTimeRow(
     val samples: Int = 0,
 )
 
+/**
+ * Sprint 3, BQ12: parqueaderos con mas solicitudes de navegacion y cuantas
+ * terminan en un parqueo iniciado ahi mismo.
+ */
+@Serializable
+data class NavigationConversionRow(
+    @SerialName("parking_name") val parkingName: String,
+    @SerialName("navigation_requests") val navigationRequests: Int,
+    @SerialName("parking_starts") val parkingStarts: Int,
+    @SerialName("conversion_pct") val conversionPct: Double = 0.0,
+)
+
 /** Todo lo que pinta el dashboard, en una sola carga. */
 @Serializable
 data class DashboardData(
@@ -70,6 +82,7 @@ data class DashboardData(
     val bq5: List<Bq5Row> = emptyList(),
     val bq6: List<Bq6Row> = emptyList(),
     val loadTimes: List<LoadTimeRow> = emptyList(),
+    val navigationConversion: List<NavigationConversionRow> = emptyList(),
 )
 
 object DashboardRepository {
@@ -89,6 +102,11 @@ object DashboardRepository {
         // Si la vista todavia no existe en Supabase, el resto del dashboard sigue funcionando.
         loadTimes = runCatching {
             supabase.from("bq2_slowest_screens_by_device").select().decodeList<LoadTimeRow>()
+        }.getOrDefault(emptyList()),
+        navigationConversion = runCatching {
+            supabase.from("bq12_navigation_conversion_last_7_days")
+                .select()
+                .decodeList<NavigationConversionRow>()
         }.getOrDefault(emptyList()),
     )
 }

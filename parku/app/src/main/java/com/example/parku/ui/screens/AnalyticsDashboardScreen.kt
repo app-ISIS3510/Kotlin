@@ -229,6 +229,19 @@ private fun DashboardContent(data: DashboardData) {
 
     Spacer(Modifier.height(18.dp))
 
+    DashboardCard(
+        title = "BQ12 · Navigation requests by parking lot",
+        subtitle = "Last 7 days · % that ended in a parking start",
+    ) {
+        RankedList(
+            data = data.navigationConversion.map {
+                BarDatum("${it.parkingName} · ${it.conversionPct}% parked", it.navigationRequests)
+            },
+        )
+    }
+
+    Spacer(Modifier.height(18.dp))
+
     // Sprint 3: BQ2 de la lista del Sprint 1 (tiempo de carga por pantalla y dispositivo).
     DashboardCard(
         title = "Slowest screens by device",

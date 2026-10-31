@@ -652,8 +652,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         track("parking_detail_viewed", screen = "parking_detail", parkingId = parkingId)
     }
 
-    fun trackNavigationOpened(parkingId: String) {
-        track("navigation_opened", screen = "parking_detail", parkingId = parkingId)
+    fun trackNavigationOpened(parkingId: String, screen: String) {
+        track("navigation_opened", screen = screen, parkingId = parkingId)
     }
 
     fun dismissError() {
