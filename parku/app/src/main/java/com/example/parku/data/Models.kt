@@ -17,6 +17,7 @@ data class Parking(
     @SerialName("car_spaces") val carSpaces: Int = 0,
     @SerialName("motorcycle_spaces") val motorcycleSpaces: Int = 0,
     @SerialName("price_per_minute") val pricePerMinute: Double = 0.0,
+    @SerialName("image_url") val imageUrl: String? = null,
     @SerialName("opening_time") val openingTime: String? = null,
     @SerialName("closing_time") val closingTime: String? = null,
     // La tabla base `parking_lots` no trae estas dos columnas, solo la vista.

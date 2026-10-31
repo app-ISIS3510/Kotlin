@@ -37,6 +37,7 @@ import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.PickupButton
 import com.example.parku.ui.components.ScreenHeader
 import com.example.parku.data.Parking
+import com.example.parku.ui.components.ParkingPhoto
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
 
@@ -73,11 +74,9 @@ fun ParkingDetailsScreen(
                     .height(160.dp)
                     .clip(RoundedCornerShape(16.dp)),
             ) {
-                Image(
-                    painter = painterResource(R.drawable.cityu),
-                    contentDescription = null,
+                ParkingPhoto(
+                    imageUrl = parking.imageUrl,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
                 )
 
                 Box(
