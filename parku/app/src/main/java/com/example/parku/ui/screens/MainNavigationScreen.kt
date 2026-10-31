@@ -18,8 +18,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.parku.ui.theme.AppColors
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -190,7 +192,10 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
     // Con el permiso concedido se lee la posicion para ordenar por cercania.
     LaunchedEffect(hasLocationPermission) {
         if (hasLocationPermission) {
-            viewModel.updateUserLocation(LocationProvider.currentLocation(context))
+            viewModel.updateUserLocation(
+                LocationProvider.currentLocation(context)
+                    ?: LocationProvider.lastLocation(context),
+            )
         }
     }
 
@@ -235,15 +240,35 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
             NavigationLinks.googleMaps(latitude, longitude)
         }
 
-        viewModel.trackNavigationOpened(parking.id)
+        val parkingId = parking.id
 
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }.onFailure {
-            scope.launch {
-                snackbarHostState.showSnackbar("Could not open $app: ${it.message}")
+        fun openApp() {
+            viewModel.trackNavigationOpened(parkingId)
+            viewModel.savePreferredNavApp(app)
+
+            runCatching {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }.onFailure {
+                scope.launch {
+                    snackbarHostState.showSnackbar("Could not open $app: ${it.message}")
+                }
             }
         }
+
+        // Sin red se avisa antes, porque la app externa puede no cargar la ruta.
+        if (!viewModel.isOnline) {
+            scope.launch {
+                val result = snackbarHostState.showSnackbar(
+                    message = "You're offline. $app may not be able to load the route.",
+                    actionLabel = "Open anyway",
+                    duration = SnackbarDuration.Long,
+                )
+                if (result == SnackbarResult.ActionPerformed) openApp()
+            }
+            return
+        }
+
+        openApp()
     }
 
     val current = stack.lastOrNull()
@@ -251,13 +276,21 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
         if (current != null) {
             when (current) {
                 is Overlay.Details -> {
-                    val parking = current.parking
+                    // La copia mas reciente, para que los cupos sean los del ultimo refresco.
+                    val parking = viewModel.parkingLots.firstOrNull { it.id == current.parking.id }
+                        ?: current.parking
 
                     LaunchedEffect(parking.id) { viewModel.trackDetailViewed(parking.id) }
 
                     ParkingDetailsScreen(
                         parking = parking,
                         isFavorite = viewModel.isFavorite(parking),
+                        availabilityUpdatedAt = if (viewModel.isOnline) {
+                            null
+                        } else {
+                            viewModel.availabilityUpdatedAt(parking.id)
+                        },
+                        preferredNavApp = viewModel.preferredNavApp,
                         onToggleFavorite = { viewModel.toggleFavorite(parking) },
                         onParkHere = { push(Overlay.Pickup(parking)) },
                         onWaze = { openNavigation(parking, "Waze") },
@@ -386,6 +419,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     data = viewModel.dashboard,
                     loading = viewModel.dashboardLoading,
                     error = viewModel.dashboardError,
+                    savedAt = viewModel.dashboardSavedAt,
                     onRetry = { viewModel.loadDashboard() },
                     onNavTap = changePageFromOverlay,
                     onBack = { pop() },
@@ -496,12 +530,10 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     onMyFavorites = { changePage(2) },
                     // El dashboard es el informe compartido de Data Studio (igual que en Flutter).
                     onAnalyticsDashboard = {
+                        // Con red se guarda una copia de los resultados; sin red se muestra esa copia.
+                        viewModel.loadDashboard()
                         if (!viewModel.isOnline) {
-                            scope.launch {
-                                snackbarHostState.showSnackbar(
-                                    "The analytics dashboard needs an internet connection.",
-                                )
-                            }
+                            push(Overlay.Dashboard)
                         } else {
                             runCatching {
                                 context.startActivity(

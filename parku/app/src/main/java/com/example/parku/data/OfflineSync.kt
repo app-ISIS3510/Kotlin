@@ -4,17 +4,36 @@ import android.os.Build
 import io.github.jan.supabase.postgrest.from
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** Un unico lugar que sabe como ejecutar cada operacion pendiente contra Supabase. */
 object PendingSync {
 
     suspend fun run(op: PendingOp) {
         when (op.type) {
-            OP_TRACK -> AnalyticsRepository.trackEvent(op.eventType!!, op.screen, op.parkingId, op.metadata)
+            OP_TRACK -> AnalyticsRepository.trackEvent(
+                op.eventType!!,
+                op.screen,
+                op.parkingId,
+                withEventInfo(op),
+            )
             OP_FAVORITE_ADD -> FavoriteRepository.addFavorite(op.parkingId!!)
             OP_FAVORITE_REMOVE -> FavoriteRepository.removeFavorite(op.parkingId!!)
         }
     }
+}
+
+/**
+ * Si el evento se envia tarde (estaba en la cola), la base le pone la hora del envio.
+ * Por eso se manda tambien la hora real y el id del evento, para no contarlo en
+ * otro dia ni dos veces si se reintenta.
+ */
+private fun withEventInfo(op: PendingOp): JsonObject = buildJsonObject {
+    op.metadata?.forEach { (key, value) -> put(key, value) }
+    put("client_event_id", op.id)
+    op.occurredAt?.let { put("occurred_at", it) }
 }
 
 /** Fila que se inserta en `screen_load_times`. user_id lo pone la base con auth.uid(). */

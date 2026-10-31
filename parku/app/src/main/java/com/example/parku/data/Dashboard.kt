@@ -61,6 +61,7 @@ data class LoadTimeRow(
 )
 
 /** Todo lo que pinta el dashboard, en una sola carga. */
+@Serializable
 data class DashboardData(
     val bq1: List<Bq1Row> = emptyList(),
     val bq2: List<Bq2Row> = emptyList(),

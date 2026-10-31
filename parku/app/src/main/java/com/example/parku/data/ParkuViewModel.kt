@@ -49,6 +49,19 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
      */
     private val parkingMemoryCache = android.util.LruCache<String, Parking>(32)
 
+    /**
+     * Cuando se confirmo con el servidor la disponibilidad de cada parqueadero.
+     * Son pocos parqueaderos, asi que un ArrayMap gasta menos memoria que un HashMap.
+     */
+    private val availabilityCheckedAt = android.util.ArrayMap<String, Long>()
+
+    fun availabilityUpdatedAt(parkingId: String): Long =
+        availabilityCheckedAt[parkingId] ?: lastSyncAt
+
+    /** App de navegacion preferida (DataStore), null si todavia no ha elegido. */
+    var preferredNavApp by mutableStateOf<String?>(null)
+        private set
+
     /** Cambios hechos sin red que todavia no se han enviado. */
     var pendingCount by mutableStateOf(0)
         private set
@@ -124,18 +137,47 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     var dashboardError by mutableStateOf<String?>(null)
         private set
 
+    /** Hora en que se guardaron los resultados que se ven; 0 si son los actuales. */
+    var dashboardSavedAt by mutableStateOf(0L)
+        private set
+
     fun loadDashboard() {
         viewModelScope.launch {
             dashboardLoading = true
             dashboardError = null
             try {
-                dashboard = timed("analytics_dashboard") { DashboardRepository.load() }
-            } catch (e: Exception) {
-                dashboardError = e.message ?: "Could not load the dashboard"
+                if (isOnline) {
+                    try {
+                        val fresh = timed("analytics_dashboard") { DashboardRepository.load() }
+                        dashboard = fresh
+                        dashboardSavedAt = 0L
+                        store.saveDashboard(CachedDashboard(fresh, System.currentTimeMillis()))
+                        return@launch
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        if (!isNetworkFailure(e)) {
+                            dashboardError = e.message ?: "Could not load the dashboard"
+                            return@launch
+                        }
+                    }
+                }
+                // EC-07: sin red se muestran los ultimos resultados guardados.
+                val cached = store.dashboard()
+                if (cached != null) {
+                    dashboard = cached.data
+                    dashboardSavedAt = cached.savedAt
+                } else {
+                    dashboardError = "There are no saved results yet. Connect to the internet and try again."
+                }
             } finally {
                 dashboardLoading = false
             }
         }
+    }
+
+    fun savePreferredNavApp(app: String) {
+        preferredNavApp = app
+        viewModelScope.launch { store.savePreferredNavApp(app) }
     }
 
     var authBusy by mutableStateOf(false)
@@ -182,6 +224,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             isSignedIn = false
             isAdmin = false
             dashboard = null
+            dashboardSavedAt = 0L
+            preferredNavApp = null
             favorites = emptyList()
             vehicles = emptyList()
             activeSession = null
@@ -331,6 +375,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
                     parkingLots = freshLots
                     freshLots.forEach { parkingMemoryCache.put(it.id, it) }
+                    markAvailabilityChecked(freshLots)
                     if (signedIn) {
                         isAdmin = freshAdmin
                         favorites = freshFavorites
@@ -349,6 +394,11 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 if (!silent) isLoading = false
             }
         }
+    }
+
+    private fun markAvailabilityChecked(lots: List<Parking>) {
+        val now = System.currentTimeMillis()
+        lots.forEach { availabilityCheckedAt[it.id] = now }
     }
 
     private suspend fun fetchActiveSession(): Pair<ParkingSession?, Parking?> {
@@ -473,6 +523,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             }
             try {
                 searchResults = ParkingRepository.searchParkingLots(query)
+                markAvailabilityChecked(searchResults)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 errorMessage = e.message ?: "Search failed"
@@ -619,6 +670,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         parkingId: String?,
         metadata: JsonObject? = null,
     ) {
+        // La hora se toma aqui y no al enviarlo, por si el evento se queda en la cola.
+        val occurredAt = nowIso()
         viewModelScope.launch {
             val op = newOp(
                 OP_TRACK,
@@ -626,7 +679,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 screen = screen,
                 parkingId = parkingId,
                 metadata = metadata,
-            )
+            ).copy(occurredAt = occurredAt)
             if (isOnline) {
                 try {
                     withContext(Dispatchers.IO) { PendingSync.run(op) }
@@ -767,6 +820,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             userEmail = AuthRepository.currentUserEmail().orEmpty()
             authReady = true
 
+            preferredNavApp = store.preferredNavApp()
             restoreFromCache()
             refreshPendingCount()
             if (isOnline) syncPending()

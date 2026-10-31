@@ -44,6 +44,8 @@ import com.example.parku.ui.theme.Inter
 fun ParkingDetailsScreen(
     parking: Parking,
     isFavorite: Boolean,
+    availabilityUpdatedAt: Long?,
+    preferredNavApp: String?,
     onToggleFavorite: () -> Unit,
     onParkHere: () -> Unit,
     onWaze: () -> Unit,
@@ -157,6 +159,24 @@ fun ParkingDetailsScreen(
                 )
             }
 
+            // Sin red los cupos son los del ultimo refresco y pueden haber cambiado.
+            if (availabilityUpdatedAt != null) {
+                Spacer(Modifier.height(10.dp))
+
+                Text(
+                    text = if (availabilityUpdatedAt > 0) {
+                        "Last known availability (" + formatUpdatedAt(availabilityUpdatedAt) +
+                            "). Spaces may have changed."
+                    } else {
+                        "Availability may be outdated while you're offline."
+                    },
+                    fontFamily = Inter,
+                    fontSize = 13.sp,
+                    lineHeight = 17.55.sp,
+                    color = AppColors.greyText,
+                )
+            }
+
             Spacer(Modifier.height(18.dp))
 
             Text(
@@ -173,8 +193,8 @@ fun ParkingDetailsScreen(
             Row {
                 PickupButton(
                     text = "Waze",
-                    background = AppColors.lightPurple,
-                    foreground = AppColors.primary,
+                    background = navBackground(preferredNavApp == "Waze"),
+                    foreground = navForeground(preferredNavApp == "Waze"),
                     onPressed = onWaze,
                     modifier = Modifier.weight(1f),
                 )
@@ -183,8 +203,8 @@ fun ParkingDetailsScreen(
 
                 PickupButton(
                     text = "Google Maps",
-                    background = AppColors.lightPurple,
-                    foreground = AppColors.primary,
+                    background = navBackground(preferredNavApp == "Google Maps"),
+                    foreground = navForeground(preferredNavApp == "Google Maps"),
                     onPressed = onGoogleMaps,
                     modifier = Modifier.weight(1f),
                 )
@@ -259,3 +279,14 @@ private fun SpacesCard(
         }
     }
 }
+
+// La app que la persona uso la ultima vez queda resaltada.
+private fun navBackground(preferred: Boolean) =
+    if (preferred) AppColors.primary else AppColors.lightPurple
+
+private fun navForeground(preferred: Boolean) =
+    if (preferred) AppColors.white else AppColors.primary
+
+private fun formatUpdatedAt(millis: Long): String =
+    java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(millis))

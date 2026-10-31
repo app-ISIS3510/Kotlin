@@ -30,6 +30,20 @@ object LocationProvider {
             continuation.invokeOnCancellation { cancellation.cancel() }
         }
 
+    /** Ultima posicion conocida por el telefono; sirve cuando no se logra una lectura nueva. */
+    @SuppressLint("MissingPermission")
+    suspend fun lastLocation(context: Context): Pair<Double, Double>? =
+        suspendCancellableCoroutine { continuation ->
+            runCatching {
+                LocationServices.getFusedLocationProviderClient(context)
+                    .lastLocation
+                    .addOnSuccessListener { location ->
+                        continuation.resume(location?.let { it.latitude to it.longitude })
+                    }
+                    .addOnFailureListener { continuation.resume(null) }
+            }.onFailure { continuation.resume(null) }
+        }
+
     /** Metros entre dos puntos, igual que Geolocator.distanceBetween. */
     fun distanceBetween(
         fromLatitude: Double,

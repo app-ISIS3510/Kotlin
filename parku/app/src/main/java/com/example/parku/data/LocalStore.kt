@@ -26,6 +26,9 @@ data class CachedProfile(val name: String = "", val email: String = "")
 @Serializable
 data class CachedSession(val session: ParkingSession, val parking: Parking? = null)
 
+@Serializable
+data class CachedDashboard(val data: DashboardData, val savedAt: Long)
+
 /** Operacion hecha sin conexion que espera a ser enviada a Supabase. */
 @Serializable
 data class PendingOp(
@@ -41,6 +44,7 @@ data class PendingOp(
     val parkingId: String? = null,
     val metadata: JsonObject? = null,
     val attempts: Int = 0,
+    val occurredAt: String? = null,
 )
 
 /** Una medicion de tiempo de carga de una pantalla (BQ2). */
@@ -76,6 +80,7 @@ class LocalStore(context: Context) {
     private object Keys {
         val owner = stringPreferencesKey("owner")
         val lastSync = longPreferencesKey("last_sync_at")
+        val navApp = stringPreferencesKey("preferred_nav_app")
     }
 
     private object Files {
@@ -85,6 +90,7 @@ class LocalStore(context: Context) {
         const val parkingLots = "parking_lots.json"
         const val pending = "pending_ops.json"
         const val perf = "perf_queue.json"
+        const val dashboard = "dashboard.json"
     }
 
     // Sin candado: se usan siempre dentro de fileMutex.
@@ -127,6 +133,14 @@ class LocalStore(context: Context) {
         withContext(Dispatchers.IO) { ds.edit { it[Keys.lastSync] = millis } }
     }
 
+    /** "Waze" o "Google Maps": la ultima app que la persona uso para llegar. */
+    suspend fun preferredNavApp(): String? =
+        withContext(Dispatchers.IO) { ds.data.first()[Keys.navApp] }
+
+    suspend fun savePreferredNavApp(app: String) {
+        withContext(Dispatchers.IO) { ds.edit { it[Keys.navApp] = app } }
+    }
+
     // --- Cache de lectura (archivos JSON) ----------------------------------
 
     suspend fun profile(): CachedProfile? = read(Files.profile)
@@ -139,6 +153,9 @@ class LocalStore(context: Context) {
     suspend fun saveParkingLots(value: List<Parking>) = write(Files.parkingLots, value)
 
     suspend fun session(): CachedSession? = read(Files.session)
+
+    suspend fun dashboard(): CachedDashboard? = read(Files.dashboard)
+    suspend fun saveDashboard(value: CachedDashboard) = write(Files.dashboard, value)
 
     suspend fun saveSession(value: CachedSession?) {
         if (value != null) {

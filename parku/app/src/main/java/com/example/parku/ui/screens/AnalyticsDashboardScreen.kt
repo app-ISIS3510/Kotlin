@@ -40,6 +40,7 @@ fun AnalyticsDashboardScreen(
     data: DashboardData?,
     loading: Boolean,
     error: String?,
+    savedAt: Long,
     onRetry: () -> Unit,
     onNavTap: (Int) -> Unit,
     onBack: () -> Unit,
@@ -101,13 +102,37 @@ fun AnalyticsDashboardScreen(
                     )
                 }
 
-                data != null -> DashboardContent(data)
+                data != null -> Column {
+                    if (savedAt > 0) {
+                        Text(
+                            text = "Offline · these results are from " + formatSavedAt(savedAt) +
+                                " and may not be current.",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(AppColors.lightPurple)
+                                .padding(16.dp),
+                            fontFamily = Inter,
+                            fontSize = 13.sp,
+                            lineHeight = 17.55.sp,
+                            color = AppColors.primary,
+                        )
+
+                        Spacer(Modifier.height(18.dp))
+                    }
+
+                    DashboardContent(data)
+                }
             }
         }
 
         NavBar(currentIndex = 3, onTap = onNavTap)
     }
 }
+
+private fun formatSavedAt(millis: Long): String =
+    java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(millis))
 
 /** Mismos nombres cortos que usa _Bq5Content en Flutter. */
 private fun shortEventName(event: String): String = when (event) {
