@@ -500,6 +500,18 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                 1 -> ParkingListScreen(
                     currentIndex = currentIndex,
                     parkingLots = viewModel.parkingLots,
+                    onRetry = { viewModel.refresh() },
+                    smartParking = viewModel.smartParking,
+                    vehicleType = viewModel.smartVehicleType,
+                    onVehicleType = { viewModel.selectSmartVehicleType(it) },
+                    radiusMeters = viewModel.smartRadiusMeters,
+                    onRadius = { viewModel.selectSmartRadius(it) },
+                    locationNotice = viewModel.locationNotice,
+                    onRefreshLocation = {
+                        scope.launch {
+                            viewModel.updateUserLocation(LocationProvider.currentLocation(context))
+                        }
+                    },
                     onNavTap = changePage,
                     // Flujo de la wiki: Parking Lots -> Parking Details -> Pickup Time.
                     onSelectParking = { parking -> push(Overlay.Details(parking)) },
