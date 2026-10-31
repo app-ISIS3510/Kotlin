@@ -207,7 +207,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
                         if (!isNetworkFailure(e)) {
-                            dashboardError = e.message ?: "Could not load the dashboard"
+                            dashboardError = reason(e, "Could not load the dashboard.")
                             return@launch
                         }
                     }

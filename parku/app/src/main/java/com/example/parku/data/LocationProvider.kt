@@ -48,7 +48,6 @@ object LocationProvider {
             }.onFailure { continuation.resume(null) }
         }
 
-    /** Metros entre dos puntos, igual que Geolocator.distanceBetween. */
     fun failureReason(context: Context): String {
         val granted = listOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
