@@ -157,6 +157,7 @@ fun PickupTimeScreen(
 
             PickupButton(
                 text = "Start parking",
+                enabled = selectedTime != null,
                 onPressed = {
                     selectedTime?.let { onStartParking(it, it == availableTimes.firstOrNull()) }
                 },
