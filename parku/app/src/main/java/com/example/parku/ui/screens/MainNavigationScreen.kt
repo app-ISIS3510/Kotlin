@@ -41,6 +41,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.parku.data.Parking
 import com.example.parku.data.DrivingRestrictionService
+import com.example.parku.data.EntryPoint
 import com.example.parku.data.LocationProvider
 import com.example.parku.data.NavigationLinks
 import com.example.parku.data.ParkuViewModel
@@ -57,9 +58,9 @@ private const val REFRESH_INTERVAL_MS = 5_000L
  * por encima de la pantalla con pestanas.
  */
 private sealed interface Overlay {
-    data class Details(val parking: Parking) : Overlay
+    data class Details(val parking: Parking, val origin: EntryPoint) : Overlay
 
-    data class Pickup(val parking: Parking) : Overlay
+    data class Pickup(val parking: Parking, val origin: EntryPoint) : Overlay
 
     data object ChangePickup : Overlay
 
@@ -282,7 +283,9 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     val parking = viewModel.parkingLots.firstOrNull { it.id == current.parking.id }
                         ?: current.parking
 
-                    LaunchedEffect(parking.id) { viewModel.trackDetailViewed(parking.id) }
+                    LaunchedEffect(parking.id) {
+                        viewModel.trackDetailViewed(parking.id, current.origin)
+                    }
 
                     ParkingDetailsScreen(
                         parking = parking,
@@ -294,7 +297,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         },
                         preferredNavApp = viewModel.preferredNavApp,
                         onToggleFavorite = { viewModel.toggleFavorite(parking) },
-                        onParkHere = { push(Overlay.Pickup(parking)) },
+                        onParkHere = { push(Overlay.Pickup(parking, current.origin)) },
                         onWaze = { openNavigation(parking, "Waze", "parking_detail") },
                         onGoogleMaps = { openNavigation(parking, "Google Maps", "parking_detail") },
                         onNavTap = changePageFromOverlay,
@@ -319,7 +322,12 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     onNavTap = changePageFromOverlay,
                     onBack = { pop() },
                     onStartParking = { time, usedSuggested ->
-                        viewModel.startParking(current.parking, time, usedSuggested) {
+                        viewModel.startParking(
+                            current.parking,
+                            time,
+                            usedSuggested,
+                            current.origin,
+                        ) {
                             closeAll()
                             currentIndex = 3
                             push(Overlay.MyParking)
@@ -439,7 +447,9 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         refreshFailed = viewModel.comparisonRefreshFailed,
                         onRefresh = { viewModel.refreshComparison() },
                         onRemove = { id -> viewModel.removeFromComparison(id) },
-                        onOpenDetails = { parking -> push(Overlay.Details(parking)) },
+                        onOpenDetails = { parking ->
+                            push(Overlay.Details(parking, EntryPoint.COMPARE))
+                        },
                         onBack = { pop() },
                     )
                 }
@@ -503,7 +513,9 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         SearchResultsScreen(
                             query = current.query,
                             results = results,
-                            onSelectParking = { parking -> push(Overlay.Details(parking)) },
+                            onSelectParking = { parking ->
+                                push(Overlay.Details(parking, EntryPoint.SEARCH))
+                            },
                             onClearSearch = {
                                 pop()
                                 push(Overlay.Search(""))
@@ -539,7 +551,9 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     },
                     onNavTap = changePage,
                     // Flujo de la wiki: Parking Lots -> Parking Details -> Pickup Time.
-                    onSelectParking = { parking -> push(Overlay.Details(parking)) },
+                    onSelectParking = { parking ->
+                        push(Overlay.Details(parking, EntryPoint.LIST))
+                    },
                     onOpenSearch = { push(Overlay.Search("")) },
                     isCompared = { id -> viewModel.isCompared(id) },
                     comparisonHasCapacity = viewModel.comparisonHasCapacity,
@@ -556,7 +570,9 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         favorites = viewModel.favorites,
                         onNavTap = changePage,
                         onRemove = { parking -> viewModel.toggleFavorite(parking) },
-                        onSelectFavorite = { parking -> push(Overlay.Details(parking)) },
+                        onSelectFavorite = { parking ->
+                            push(Overlay.Details(parking, EntryPoint.FAVORITES))
+                        },
                     )
                 }
 
@@ -597,7 +613,9 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     parkingLots = viewModel.parkingLots,
                     hasLocationPermission = hasLocationPermission,
                     isOnline = viewModel.isOnline,
-                    onSelectParking = { parking -> push(Overlay.Details(parking)) },
+                    onSelectParking = { parking ->
+                        push(Overlay.Details(parking, EntryPoint.MAP))
+                    },
                     onNavTap = changePage,
                     hasActiveParking = viewModel.hasActiveParking,
                     parkingName = viewModel.activeParking?.name.orEmpty(),
