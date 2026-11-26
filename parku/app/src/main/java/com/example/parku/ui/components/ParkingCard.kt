@@ -40,6 +40,7 @@ fun ParkingCard(
     availabilityLabel: String? = null,
     availabilityRatio: Float? = null,
     spacesLabel: String? = null,
+    comparisonAction: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -167,7 +168,13 @@ fun ParkingCard(
                     color = AppColors.greyText,
                 )
             }
+
+            if (comparisonAction != null) {
+                comparisonAction()
+            }
         }
+
+        Spacer(Modifier.width(6.dp))
 
         Icon(
             imageVector = Icons.Filled.ChevronRight,

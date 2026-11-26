@@ -80,6 +80,8 @@ private sealed interface Overlay {
     data object EndParking : Overlay
 
     data object Dashboard : Overlay
+
+    data object Compare : Overlay
 }
 
 /**
@@ -425,6 +427,23 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     onBack = { pop() },
                 )
 
+                Overlay.Compare -> {
+                    LaunchedEffect(viewModel.isOnline) {
+                        if (viewModel.isOnline) viewModel.refreshComparison()
+                    }
+
+                    ParkingComparisonScreen(
+                        selection = viewModel.comparison,
+                        isOnline = viewModel.isOnline,
+                        refreshing = viewModel.comparisonRefreshing,
+                        refreshFailed = viewModel.comparisonRefreshFailed,
+                        onRefresh = { viewModel.refreshComparison() },
+                        onRemove = { id -> viewModel.removeFromComparison(id) },
+                        onOpenDetails = { parking -> push(Overlay.Details(parking)) },
+                        onBack = { pop() },
+                    )
+                }
+
                 Overlay.EndParking -> EndParkingScreen(
                     currentIndex = 3,
                     busy = viewModel.endingParking,
@@ -491,6 +510,12 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                             },
                             onNavTap = changePageFromOverlay,
                             onBack = { pop() },
+                            isCompared = { id -> viewModel.isCompared(id) },
+                            comparisonHasCapacity = viewModel.comparisonHasCapacity,
+                            onToggleComparison = { parking -> viewModel.toggleComparison(parking) },
+                            comparisonCount = viewModel.comparison.size,
+                            comparisonCanCompare = viewModel.comparisonCanCompare,
+                            onCompare = { push(Overlay.Compare) },
                         )
                     }
                 }
@@ -516,6 +541,12 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     // Flujo de la wiki: Parking Lots -> Parking Details -> Pickup Time.
                     onSelectParking = { parking -> push(Overlay.Details(parking)) },
                     onOpenSearch = { push(Overlay.Search("")) },
+                    isCompared = { id -> viewModel.isCompared(id) },
+                    comparisonHasCapacity = viewModel.comparisonHasCapacity,
+                    onToggleComparison = { parking -> viewModel.toggleComparison(parking) },
+                    comparisonCount = viewModel.comparison.size,
+                    comparisonCanCompare = viewModel.comparisonCanCompare,
+                    onCompare = { push(Overlay.Compare) },
                 )
 
                 2 -> if (viewModel.favorites.isEmpty()) {

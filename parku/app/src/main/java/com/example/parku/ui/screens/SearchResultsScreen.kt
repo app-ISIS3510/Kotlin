@@ -24,6 +24,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.parku.ui.components.ComparisonBar
+import com.example.parku.ui.components.ComparisonToggle
 import com.example.parku.ui.components.DesignIcon
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.PickupButton
@@ -43,6 +45,12 @@ fun SearchResultsScreen(
     onClearSearch: () -> Unit,
     onNavTap: (Int) -> Unit,
     onBack: () -> Unit,
+    isCompared: (String) -> Boolean = { false },
+    comparisonHasCapacity: Boolean = false,
+    onToggleComparison: (Parking) -> Unit = {},
+    comparisonCount: Int = 0,
+    comparisonCanCompare: Boolean = false,
+    onCompare: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -87,10 +95,23 @@ fun SearchResultsScreen(
                     SearchResultCard(
                         parking = parking,
                         onClick = { onSelectParking(parking) },
+                        comparisonAction = {
+                            ComparisonToggle(
+                                selected = isCompared(parking.id),
+                                hasCapacity = comparisonHasCapacity,
+                                onToggle = { onToggleComparison(parking) },
+                            )
+                        },
                     )
                 }
             }
         }
+
+        ComparisonBar(
+            count = comparisonCount,
+            canCompare = comparisonCanCompare,
+            onCompare = onCompare,
+        )
 
         NavBar(currentIndex = 1, onTap = onNavTap)
     }
@@ -100,6 +121,7 @@ fun SearchResultsScreen(
 private fun SearchResultCard(
     parking: Parking,
     onClick: () -> Unit,
+    comparisonAction: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -143,6 +165,10 @@ private fun SearchResultCard(
                 lineHeight = 17.55.sp,
                 color = AppColors.primary,
             )
+
+            if (comparisonAction != null) {
+                comparisonAction()
+            }
         }
     }
 }
