@@ -72,6 +72,18 @@ data class NavigationConversionRow(
     @SerialName("conversion_pct") val conversionPct: Double = 0.0,
 )
 
+/**
+ * Sprint 4, BQ15: desde que punto de entrada se abre el detalle de un parqueadero
+ * y que porcentaje de esas aperturas termina en un parqueo iniciado.
+ */
+@Serializable
+data class EntryPointConversionRow(
+    @SerialName("entry_point") val entryPoint: String,
+    @SerialName("details_opened") val detailsOpened: Int,
+    @SerialName("parking_starts") val parkingStarts: Int,
+    @SerialName("conversion_pct") val conversionPct: Double = 0.0,
+)
+
 /** Todo lo que pinta el dashboard, en una sola carga. */
 @Serializable
 data class DashboardData(
@@ -83,6 +95,7 @@ data class DashboardData(
     val bq6: List<Bq6Row> = emptyList(),
     val loadTimes: List<LoadTimeRow> = emptyList(),
     val navigationConversion: List<NavigationConversionRow> = emptyList(),
+    val entryPointConversion: List<EntryPointConversionRow> = emptyList(),
 )
 
 object DashboardRepository {
@@ -107,6 +120,11 @@ object DashboardRepository {
             supabase.from("bq12_navigation_conversion_last_7_days")
                 .select()
                 .decodeList<NavigationConversionRow>()
+        }.getOrDefault(emptyList()),
+        entryPointConversion = runCatching {
+            supabase.from("bq15_entry_point_conversion_last_7_days")
+                .select()
+                .decodeList<EntryPointConversionRow>()
         }.getOrDefault(emptyList()),
     )
 }

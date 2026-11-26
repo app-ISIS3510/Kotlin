@@ -143,6 +143,15 @@ private fun shortEventName(event: String): String = when (event) {
     else -> event
 }
 
+private fun entryPointLabel(entryPoint: String): String = when (entryPoint) {
+    "map" -> "Map"
+    "list" -> "Parking list"
+    "search" -> "Search"
+    "favorites" -> "Favorites"
+    "compare" -> "Compare"
+    else -> entryPoint
+}
+
 private fun screenLabel(screen: String): String = when (screen) {
     "parking_list" -> "Parking list"
     "vehicles" -> "Vehicles"
@@ -236,6 +245,22 @@ private fun DashboardContent(data: DashboardData) {
         RankedList(
             data = data.navigationConversion.map {
                 BarDatum("${it.parkingName} · ${it.conversionPct}% parked", it.navigationRequests)
+            },
+        )
+    }
+
+    Spacer(Modifier.height(18.dp))
+
+    DashboardCard(
+        title = "BQ15 · Entry point to a parking start",
+        subtitle = "Last 7 days · % of opened details that ended in a parking start",
+    ) {
+        RankedList(
+            data = data.entryPointConversion.map {
+                BarDatum(
+                    "${entryPointLabel(it.entryPoint)} · ${it.conversionPct}% parked",
+                    it.parkingStarts,
+                )
             },
         )
     }

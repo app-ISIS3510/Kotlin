@@ -679,6 +679,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         parking: Parking,
         pickupLabel: String,
         usedSuggestedTime: Boolean,
+        entryPoint: EntryPoint,
         onDone: () -> Unit = {},
     ) {
         val vehicle = selectedVehicle
@@ -706,7 +707,15 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 activeSession = session
                 activeParking = parking
                 persistSession()
-                track("parking_started", screen = "pickup_time", parkingId = parking.id)
+                track(
+                    "parking_started",
+                    screen = "pickup_time",
+                    parkingId = parking.id,
+                    metadata = buildJsonObject {
+                        put("platform", "kotlin")
+                        put("entry_point", entryPoint.value)
+                    },
+                )
                 track(
                     "parking_pickup_choice",
                     screen = "pickup_time",
@@ -792,8 +801,16 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun trackDetailViewed(parkingId: String) {
-        track("parking_detail_viewed", screen = "parking_detail", parkingId = parkingId)
+    fun trackDetailViewed(parkingId: String, entryPoint: EntryPoint) {
+        track(
+            "parking_detail_viewed",
+            screen = "parking_detail",
+            parkingId = parkingId,
+            metadata = buildJsonObject {
+                put("platform", "kotlin")
+                put("entry_point", entryPoint.value)
+            },
+        )
     }
 
     fun trackNavigationOpened(parkingId: String, screen: String) {
