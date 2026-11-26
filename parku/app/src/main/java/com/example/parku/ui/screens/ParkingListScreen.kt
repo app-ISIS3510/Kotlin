@@ -36,6 +36,8 @@ import com.example.parku.data.Parking
 import com.example.parku.data.SMART_RADIUS_OPTIONS
 import com.example.parku.data.SmartParkingResults
 import com.example.parku.data.SmartVehicleType
+import com.example.parku.ui.components.ComparisonBar
+import com.example.parku.ui.components.ComparisonToggle
 import com.example.parku.ui.components.DesignIcon
 import com.example.parku.ui.components.NavBar
 import com.example.parku.ui.components.ParkingCard
@@ -145,6 +147,12 @@ fun ParkingListScreen(
     onRadius: (Int) -> Unit = {},
     onRefreshLocation: () -> Unit = {},
     locationNotice: String? = null,
+    isCompared: (String) -> Boolean = { false },
+    comparisonHasCapacity: Boolean = false,
+    onToggleComparison: (Parking) -> Unit = {},
+    comparisonCount: Int = 0,
+    comparisonCanCompare: Boolean = false,
+    onCompare: () -> Unit = {},
 ) {
     val vehicleWord = if (vehicleType == SmartVehicleType.CAR) "car" else "motorcycle"
 
@@ -350,10 +358,23 @@ fun ParkingListScreen(
                         availabilityLabel = result.availabilityLabel,
                         availabilityRatio = (result.availabilityPercentage / 100.0).toFloat(),
                         spacesLabel = result.spacesLabel,
+                        comparisonAction = {
+                            ComparisonToggle(
+                                selected = isCompared(result.parking.id),
+                                hasCapacity = comparisonHasCapacity,
+                                onToggle = { onToggleComparison(result.parking) },
+                            )
+                        },
                     )
                 }
             }
         }
+
+        ComparisonBar(
+            count = comparisonCount,
+            canCompare = comparisonCanCompare,
+            onCompare = onCompare,
+        )
 
         Spacer(Modifier.height(10.dp))
 

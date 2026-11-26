@@ -59,6 +59,85 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     fun availabilityUpdatedAt(parkingId: String): Long =
         availabilityCheckedAt[parkingId] ?: lastSyncAt
 
+    // Parking comparison
+    var comparison by mutableStateOf<List<ComparedParking>>(emptyList())
+        private set
+
+    var comparisonRefreshing by mutableStateOf(false)
+        private set
+
+    var comparisonRefreshFailed by mutableStateOf(false)
+        private set
+
+    val comparisonHasCapacity: Boolean
+        get() = comparison.size < COMPARISON_MAX_SELECTION
+
+    val comparisonCanCompare: Boolean
+        get() = comparison.size >= COMPARISON_MIN_SELECTION
+
+    fun isCompared(parkingId: String): Boolean =
+        comparison.any { it.parking.id == parkingId }
+
+    fun toggleComparison(parking: Parking) {
+        val existing = comparison.firstOrNull { it.parking.id == parking.id }
+        comparison = when {
+            existing != null -> comparison - existing
+            comparisonHasCapacity -> comparison + ComparedParking(
+                parking = parking,
+                updatedAt = availabilityUpdatedAt(parking.id).takeIf { it > 0L },
+                isFromCache = !isOnline,
+            )
+            else -> comparison
+        }
+    }
+
+    fun removeFromComparison(parkingId: String) {
+        comparison = comparison.filterNot { it.parking.id == parkingId }
+    }
+
+    fun refreshComparison() {
+        if (!isOnline || comparison.isEmpty() || comparisonRefreshing) return
+
+        viewModelScope.launch {
+            comparisonRefreshing = true
+            comparisonRefreshFailed = false
+
+            try {
+                val loaded = comparison
+                    .map { it.parking.id }
+                    .map { id ->
+                        async(Dispatchers.IO) {
+                            id to runCatching { ParkingRepository.getParkingById(id) }
+                        }
+                    }
+                    .map { it.await() }
+                    .toMap()
+
+                val now = System.currentTimeMillis()
+                var failed = false
+
+                comparison = comparison.map { item ->
+                    val result = loaded[item.parking.id] ?: return@map item
+                    if (result.isFailure) {
+                        failed = true
+                        return@map item.copy(isFromCache = true)
+                    }
+
+                    val fresh = result.getOrNull()
+                    ComparedParking(
+                        parking = fresh ?: item.parking,
+                        updatedAt = now,
+                        isUnavailable = fresh == null,
+                    )
+                }
+
+                comparisonRefreshFailed = failed
+            } finally {
+                comparisonRefreshing = false
+            }
+        }
+    }
+
     /** App de navegacion preferida (DataStore), null si todavia no ha elegido. */
     var preferredNavApp by mutableStateOf<String?>(null)
         private set
@@ -281,6 +360,9 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             vehicles = emptyList()
             activeSession = null
             activeParking = null
+            comparison = emptyList()
+            comparisonRefreshing = false
+            comparisonRefreshFailed = false
         }
     }
 
