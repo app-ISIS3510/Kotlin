@@ -774,6 +774,9 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     var endingParking by mutableStateOf(false)
         private set
 
+    var lastSummary by mutableStateOf<SessionSummary?>(null)
+        private set
+
     fun endParking(onDone: () -> Unit = {}) {
         val session = activeSession ?: return
         // La sesion sigue activa hasta que el servidor confirme que termino.
@@ -782,8 +785,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             endingParking = true
             try {
-                withContext(Dispatchers.IO) { SessionRepository.endSession(session.id, nowIso()) }
+                val endedAt = nowIso()
+                withContext(Dispatchers.IO) { SessionRepository.endSession(session.id, endedAt) }
                 track("parking_ended", screen = "end_parking", parkingId = session.parkingId)
+                lastSummary = buildSessionSummary(session, activeParking, endedAt)
                 activeSession = null
                 activeParking = null
                 persistSession()

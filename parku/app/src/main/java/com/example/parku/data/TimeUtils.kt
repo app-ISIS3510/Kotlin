@@ -136,6 +136,14 @@ fun generateAvailableTimes(openingTime: String?, closingTime: String?): List<Str
     return times
 }
 
+fun minutesBetween(startIso: String, endIso: String): Int {
+    val start = parseIso(startIso) ?: return 0
+    val end = parseIso(endIso) ?: return 0
+    return ((end.time - start.time) / 60_000).toInt().coerceAtLeast(1)
+}
+
+fun isoToDisplayTime(iso: String): String = formatTime12h(isoToPickupLabel(iso))
+
 /** Lo que falta para la recogida, en horas y minutos. Nunca baja de cero. */
 fun remainingUntil(pickupIso: String): Pair<Int, Int> {
     val pickup = parseIso(pickupIso) ?: return 0 to 0
