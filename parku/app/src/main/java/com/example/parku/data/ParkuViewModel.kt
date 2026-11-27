@@ -353,6 +353,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             store.clearUserData()
             summaryStore.clear()
             summaryCache.clear()
+            SummaryRefreshWorker.cancel(getApplication())
             lastSummary = null
             catalog.clear()
             pendingCount = 0
@@ -820,7 +821,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshLastSummary() {
         val current = lastSummary ?: return
-        if (!isOnline) return
+        if (!isOnline) {
+            SummaryRefreshWorker.schedule(getApplication())
+            return
+        }
         viewModelScope.launch {
             try {
                 val updated = SessionSummaryLoader.load(current)
@@ -829,6 +833,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 summaryStore.save(updated)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                SummaryRefreshWorker.schedule(getApplication())
             }
         }
     }
