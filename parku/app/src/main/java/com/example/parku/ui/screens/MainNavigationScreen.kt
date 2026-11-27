@@ -80,6 +80,8 @@ private sealed interface Overlay {
 
     data object EndParking : Overlay
 
+    data object SessionSummary : Overlay
+
     data object Dashboard : Overlay
 
     data object Compare : Overlay
@@ -457,10 +459,29 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                 Overlay.EndParking -> EndParkingScreen(
                     currentIndex = 3,
                     busy = viewModel.endingParking,
-                    onConfirm = { viewModel.endParking { closeAll() } },
+                    onConfirm = {
+                        viewModel.endParking {
+                            closeAll()
+                            push(Overlay.SessionSummary)
+                        }
+                    },
                     onNavTap = changePageFromOverlay,
                     onBack = { pop() },
                 )
+
+                Overlay.SessionSummary -> {
+                    val summary = viewModel.lastSummary
+                    if (summary == null) {
+                        LaunchedEffect(Unit) { closeAll() }
+                    } else {
+                        SessionSummaryScreen(
+                            summary = summary,
+                            currentIndex = 3,
+                            onDone = { closeAll() },
+                            onNavTap = changePageFromOverlay,
+                        )
+                    }
+                }
 
                 Overlay.Restrictions -> DrivingRestrictionsScreen(
                     vehicle = viewModel.selectedVehicle,
