@@ -31,6 +31,7 @@ import java.util.UUID
 class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     private val store = LocalStore(application)
+    private val summaryStore = SessionSummaryStore(application)
     private val catalog = ParkingCatalog(application)
     private val connectivity = ConnectivityObserver(application)
     private val syncMutex = Mutex()
@@ -349,6 +350,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching { AuthRepository.signOut() }
             store.clearUserData()
+            summaryStore.clear()
+            lastSummary = null
             catalog.clear()
             pendingCount = 0
             isSignedIn = false
@@ -572,6 +575,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             activeSession = it.session
             activeParking = it.parking
         }
+        summaryStore.load()?.let { lastSummary = it }
     }
 
     private suspend fun persistAll() {
@@ -788,7 +792,9 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 val endedAt = nowIso()
                 withContext(Dispatchers.IO) { SessionRepository.endSession(session.id, endedAt) }
                 track("parking_ended", screen = "end_parking", parkingId = session.parkingId)
-                lastSummary = buildSessionSummary(session, activeParking, endedAt)
+                val summary = buildSessionSummary(session, activeParking, endedAt)
+                lastSummary = summary
+                summaryStore.save(summary)
                 activeSession = null
                 activeParking = null
                 persistSession()

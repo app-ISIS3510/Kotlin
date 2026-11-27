@@ -1,9 +1,7 @@
 package com.example.parku.data
 
-import kotlinx.serialization.Serializable
 import java.util.Locale
 
-@Serializable
 data class SessionSummary(
     val sessionId: String,
     val parkingName: String,
