@@ -42,6 +42,8 @@ fun ProfileScreen(
     onEditProfile: () -> Unit,
     onMyVehicles: () -> Unit,
     onMyParking: () -> Unit,
+    hasLastSummary: Boolean,
+    onLastSummary: () -> Unit,
     onMyFavorites: () -> Unit,
     onAnalyticsDashboard: () -> Unit,
     onSignOut: () -> Unit,
@@ -125,6 +127,17 @@ fun ProfileScreen(
                 subtitle = "Check your parking and pickup time",
                 onClick = onMyParking,
             )
+
+            if (hasLastSummary) {
+                Spacer(Modifier.height(16.dp))
+
+                MenuRow(
+                    icon = "profile_clock",
+                    title = "Last parking summary",
+                    subtitle = "See your most recent parking session",
+                    onClick = onLastSummary,
+                )
+            }
 
             Spacer(Modifier.height(16.dp))
 
