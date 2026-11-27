@@ -572,6 +572,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             activeSession = it.session
             activeParking = it.parking
         }
+        store.lastSummary()?.let { lastSummary = it }
     }
 
     private suspend fun persistAll() {
@@ -789,6 +790,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) { SessionRepository.endSession(session.id, endedAt) }
                 track("parking_ended", screen = "end_parking", parkingId = session.parkingId)
                 lastSummary = buildSessionSummary(session, activeParking, endedAt)
+                lastSummary?.let { saved -> launch { store.saveLastSummary(saved) } }
                 activeSession = null
                 activeParking = null
                 persistSession()

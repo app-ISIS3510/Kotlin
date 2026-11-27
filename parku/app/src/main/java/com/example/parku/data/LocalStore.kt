@@ -91,6 +91,7 @@ class LocalStore(context: Context) {
         const val pending = "pending_ops.json"
         const val perf = "perf_queue.json"
         const val dashboard = "dashboard.json"
+        const val lastSummary = "last_summary.json"
     }
 
     // Sin candado: se usan siempre dentro de fileMutex.
@@ -168,6 +169,9 @@ class LocalStore(context: Context) {
 
     suspend fun dashboard(): CachedDashboard? = read(Files.dashboard)
     suspend fun saveDashboard(value: CachedDashboard) = write(Files.dashboard, value)
+
+    suspend fun lastSummary(): SessionSummary? = read(Files.lastSummary)
+    suspend fun saveLastSummary(value: SessionSummary) = write(Files.lastSummary, value)
 
     suspend fun saveSession(value: CachedSession?) {
         if (value != null) {
