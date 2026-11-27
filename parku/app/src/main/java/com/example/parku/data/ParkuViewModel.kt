@@ -83,6 +83,15 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     var comparisonRefreshFailed by mutableStateOf(false)
         private set
 
+    /** Un refresco pedido mientras otro corre no se pierde: se lanza al terminar. */
+    private var comparisonRefreshPending = false
+
+    /** Al quedarse sin red lo que haya en memoria deja de servir. */
+    private var comparisonStale = false
+
+    /** Sube al perder la red, para no aplicar lo que llegue tarde de un refresco viejo. */
+    private var comparisonConnectionVersion = 0
+
     val comparisonHasCapacity: Boolean
         get() = comparison.size < COMPARISON_MAX_SELECTION
 
@@ -133,14 +142,23 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     /** @param force para el boton de refrescar: no reusa nada de memoria. */
     fun refreshComparison(force: Boolean = false) {
-        if (!isOnline || comparison.isEmpty() || comparisonRefreshing) return
+        if (!isOnline || comparison.isEmpty()) return
+        if (comparisonRefreshing) {
+            comparisonRefreshPending = true
+            return
+        }
+
+        val version = comparisonConnectionVersion
+        // Despues de un corte no se reusa nada: la disponibilidad pudo cambiar mientras tanto.
+        val reuseAllowed = !force && !comparisonStale
+        comparisonStale = false
 
         viewModelScope.launch {
             comparisonRefreshing = true
             comparisonRefreshFailed = false
 
             try {
-                val reused = if (force) emptyMap() else comparison.mapNotNull { item ->
+                val reused = if (!reuseAllowed) emptyMap() else comparison.mapNotNull { item ->
                     val hit = comparisonCache.get(item.parking.id) ?: return@mapNotNull null
                     // Nunca retroceder a una copia mas vieja que la que ya se ve.
                     if ((hit.updatedAt ?: 0L) < (item.updatedAt ?: 0L)) return@mapNotNull null
@@ -157,6 +175,9 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     .map { it.await() }
                     .toMap()
+
+                // Si la red se cayo mientras tanto, lo que llego ya no describe el estado actual.
+                if (version != comparisonConnectionVersion) return@launch
 
                 val now = System.currentTimeMillis()
                 var failed = false
@@ -190,6 +211,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 persistComparison()
             } finally {
                 comparisonRefreshing = false
+                if (comparisonRefreshPending) {
+                    comparisonRefreshPending = false
+                    refreshComparison(force = true)
+                }
             }
         }
     }
@@ -1059,6 +1084,11 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             var wasOnline = connectivity.online.value
             connectivity.online.collect { online ->
                 isOnline = online
+                if (!online) {
+                    comparisonConnectionVersion++
+                    comparisonStale = true
+                    comparisonRefreshPending = false
+                }
                 if (online && !wasOnline) {
                     syncPending()
                     refresh(silent = true)
