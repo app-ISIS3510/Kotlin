@@ -32,6 +32,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     private val store = LocalStore(application)
     private val summaryStore = SessionSummaryStore(application)
+    private val summaryCache = SessionSummaryCache()
     private val catalog = ParkingCatalog(application)
     private val connectivity = ConnectivityObserver(application)
     private val syncMutex = Mutex()
@@ -351,6 +352,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { AuthRepository.signOut() }
             store.clearUserData()
             summaryStore.clear()
+            summaryCache.clear()
             lastSummary = null
             catalog.clear()
             pendingCount = 0
@@ -575,7 +577,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             activeSession = it.session
             activeParking = it.parking
         }
-        summaryStore.load()?.let { lastSummary = it }
+        summaryStore.load()?.let {
+            lastSummary = it
+            summaryCache.put(it)
+        }
     }
 
     private suspend fun persistAll() {
@@ -794,6 +799,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 track("parking_ended", screen = "end_parking", parkingId = session.parkingId)
                 val summary = buildSessionSummary(session, activeParking, endedAt)
                 lastSummary = summary
+                summaryCache.put(summary)
                 summaryStore.save(summary)
                 activeSession = null
                 activeParking = null
@@ -811,6 +817,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    fun summaryFor(sessionId: String): SessionSummary? =
+        summaryCache.get(sessionId)
+            ?: summaryStore.load()?.takeIf { it.sessionId == sessionId }?.also { summaryCache.put(it) }
 
     fun trackDetailViewed(parkingId: String, entryPoint: EntryPoint) {
         track(
