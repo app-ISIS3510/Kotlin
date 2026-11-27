@@ -18,6 +18,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.example.parku.data.local.ComparisonStore
 import com.example.parku.data.local.ParkingCatalog
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -33,8 +34,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     private val store = LocalStore(application)
     private val summaryStore = SessionSummaryStore(application)
     private val catalog = ParkingCatalog(application)
+    private val comparisonStore = ComparisonStore(application)
     private val connectivity = ConnectivityObserver(application)
     private val syncMutex = Mutex()
+    private val comparisonWriteMutex = Mutex()
 
     /** Estado de la red, para el aviso de "sin conexion". */
     var isOnline by mutableStateOf(connectivity.online.value)
@@ -81,7 +84,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleComparison(parking: Parking) {
         val existing = comparison.firstOrNull { it.parking.id == parking.id }
-        comparison = when {
+        val updated = when {
             existing != null -> comparison - existing
             comparisonHasCapacity -> comparison + ComparedParking(
                 parking = parking,
@@ -90,10 +93,30 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             )
             else -> comparison
         }
+        if (updated === comparison) return
+
+        comparison = updated
+        persistComparison()
     }
 
     fun removeFromComparison(parkingId: String) {
-        comparison = comparison.filterNot { it.parking.id == parkingId }
+        val updated = comparison.filterNot { it.parking.id == parkingId }
+        if (updated.size == comparison.size) return
+
+        comparison = updated
+        persistComparison()
+    }
+
+    /**
+     * La seleccion queda en el telefono con su orden, una fila por cuenta. El candado
+     * evita que dos cambios seguidos se escriban al reves.
+     */
+    private fun persistComparison() {
+        val snapshot = comparison
+        viewModelScope.launch {
+            val uid = AuthRepository.currentUserId() ?: return@launch
+            comparisonWriteMutex.withLock { comparisonStore.write(uid, snapshot) }
+        }
     }
 
     fun refreshComparison() {
@@ -133,6 +156,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 comparisonRefreshFailed = failed
+                persistComparison()
             } finally {
                 comparisonRefreshing = false
             }
@@ -558,6 +582,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     /** Pinta lo ultimo que se vio, sin esperar a la red. */
     private suspend fun restoreFromCache() {
         val uid = AuthRepository.currentUserId() ?: return
+        comparison = comparisonStore.read(uid).take(COMPARISON_MAX_SELECTION)
         if (store.owner() != uid) return
 
         lastSyncAt = store.lastSyncAt()

@@ -4,7 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.kapt")
 }
+
+// Sprint 4: ObjectBox. Se aplica despues de los plugins de Kotlin.
+apply(plugin = "io.objectbox")
 
 android {
     namespace = "com.example.parku"
