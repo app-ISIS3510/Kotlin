@@ -818,6 +818,21 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun refreshLastSummary() {
+        val current = lastSummary ?: return
+        if (!isOnline) return
+        viewModelScope.launch {
+            try {
+                val updated = SessionSummaryLoader.load(current)
+                lastSummary = updated
+                summaryCache.put(updated)
+                summaryStore.save(updated)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+        }
+    }
+
     fun summaryFor(sessionId: String): SessionSummary? =
         summaryCache.get(sessionId)
             ?: summaryStore.load()?.takeIf { it.sessionId == sessionId }?.also { summaryCache.put(it) }

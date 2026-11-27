@@ -474,6 +474,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     if (summary == null) {
                         LaunchedEffect(Unit) { closeAll() }
                     } else {
+                        LaunchedEffect(summary.sessionId) { viewModel.refreshLastSummary() }
                         SessionSummaryScreen(
                             summary = summary,
                             currentIndex = 3,
