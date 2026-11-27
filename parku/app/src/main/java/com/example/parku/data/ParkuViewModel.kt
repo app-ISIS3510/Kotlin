@@ -49,6 +49,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
      * repetir la consulta; al llenarse, sale el menos usado.
      */
     private val parkingMemoryCache = android.util.LruCache<String, Parking>(32)
+    private val summaryMemoryCache = android.util.LruCache<String, SessionSummary>(8)
 
     /**
      * Cuando se confirmo con el servidor la disponibilidad de cada parqueadero.
@@ -572,7 +573,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             activeSession = it.session
             activeParking = it.parking
         }
-        store.lastSummary()?.let { lastSummary = it }
+        store.lastSummary()?.let {
+            lastSummary = it
+            summaryMemoryCache.put(it.sessionId, it)
+        }
     }
 
     private suspend fun persistAll() {
@@ -789,8 +793,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 val endedAt = nowIso()
                 withContext(Dispatchers.IO) { SessionRepository.endSession(session.id, endedAt) }
                 track("parking_ended", screen = "end_parking", parkingId = session.parkingId)
-                lastSummary = buildSessionSummary(session, activeParking, endedAt)
-                lastSummary?.let { saved -> launch { store.saveLastSummary(saved) } }
+                val summary = buildSessionSummary(session, activeParking, endedAt)
+                lastSummary = summary
+                summaryMemoryCache.put(summary.sessionId, summary)
+                launch { store.saveLastSummary(summary) }
                 activeSession = null
                 activeParking = null
                 persistSession()
@@ -806,6 +812,13 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 endingParking = false
             }
         }
+    }
+
+    suspend fun summaryFor(sessionId: String): SessionSummary? {
+        summaryMemoryCache.get(sessionId)?.let { return it }
+        val saved = store.lastSummary()?.takeIf { it.sessionId == sessionId } ?: return null
+        summaryMemoryCache.put(sessionId, saved)
+        return saved
     }
 
     fun trackDetailViewed(parkingId: String, entryPoint: EntryPoint) {
