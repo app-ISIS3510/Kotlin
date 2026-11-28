@@ -8,6 +8,9 @@ import kotlin.math.floor
 const val COMPARISON_MIN_SELECTION = 2
 const val COMPARISON_MAX_SELECTION = 3
 
+const val COMPARISON_CACHE_CAPACITY = 8
+const val COMPARISON_CACHE_LIFETIME_MS = 60_000L
+
 private const val UNAVAILABLE = "Unavailable"
 
 data class ComparedParking(
