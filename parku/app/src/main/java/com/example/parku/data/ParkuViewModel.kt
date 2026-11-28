@@ -50,6 +50,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     private val store = LocalStore(application)
     private val summaryStore = SessionSummaryStore(application)
+    private val summaryCache = SessionSummaryCache()
     private val catalog = ParkingCatalog(application)
     private val comparisonStore = ComparisonStore(application)
     private val budgetStore = BudgetPlanStore(application)
@@ -574,6 +575,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { AuthRepository.signOut() }
             store.clearUserData()
             summaryStore.clear()
+            summaryCache.clear()
+            SummaryRefreshWorker.cancel(getApplication())
             lastSummary = null
             catalog.clear()
             locationStore.clear()
@@ -813,7 +816,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             activeSession = it.session
             activeParking = it.parking
         }
-        summaryStore.load()?.let { lastSummary = it }
+        summaryStore.load()?.let {
+            lastSummary = it
+            summaryCache.put(it)
+        }
     }
 
     private suspend fun persistAll() {
@@ -1051,6 +1057,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 trackActionResult(ACTION_END_PARKING, "end_parking", session.parkingId)
                 val summary = buildSessionSummary(session, activeParking, endedAt)
                 lastSummary = summary
+                summaryCache.put(summary)
                 summaryStore.save(summary)
                 activeSession = null
                 activeParking = null
@@ -1104,6 +1111,29 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             },
         )
     }
+
+    fun refreshLastSummary() {
+        val current = lastSummary ?: return
+        if (!isOnline) {
+            SummaryRefreshWorker.schedule(getApplication())
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val updated = SessionSummaryLoader.load(current)
+                lastSummary = updated
+                summaryCache.put(updated)
+                summaryStore.save(updated)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                SummaryRefreshWorker.schedule(getApplication())
+            }
+        }
+    }
+
+    fun summaryFor(sessionId: String): SessionSummary? =
+        summaryCache.get(sessionId)
+            ?: summaryStore.load()?.takeIf { it.sessionId == sessionId }?.also { summaryCache.put(it) }
 
     fun trackDetailViewed(parkingId: String, entryPoint: EntryPoint) {
         track(

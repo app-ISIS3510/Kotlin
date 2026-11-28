@@ -29,6 +29,7 @@ import com.example.parku.ui.theme.Inter
 @Composable
 fun SessionSummaryScreen(
     summary: SessionSummary,
+    offline: Boolean,
     currentIndex: Int,
     onDone: () -> Unit,
     onNavTap: (Int) -> Unit,
@@ -51,6 +52,16 @@ fun SessionSummaryScreen(
                 fontWeight = FontWeight.W700,
                 color = AppColors.darkText,
             )
+
+            if (offline) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Saved copy. It will update when you are back online.",
+                    fontFamily = Inter,
+                    fontSize = 13.sp,
+                    color = AppColors.greyText,
+                )
+            }
 
             Spacer(Modifier.height(40.dp))
 

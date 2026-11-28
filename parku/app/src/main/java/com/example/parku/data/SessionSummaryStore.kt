@@ -10,6 +10,8 @@ class SessionSummaryStore(context: Context) {
     fun save(summary: SessionSummary) {
         prefs.edit()
             .putString(SESSION_ID, summary.sessionId)
+            .putString(PARKING_ID, summary.parkingId)
+            .putString(VEHICLE_ID, summary.vehicleId)
             .putString(PARKING_NAME, summary.parkingName)
             .putString(PARKING_ADDRESS, summary.parkingAddress)
             .putString(VEHICLE_TYPE, summary.vehicleType)
@@ -25,6 +27,8 @@ class SessionSummaryStore(context: Context) {
         val sessionId = prefs.getString(SESSION_ID, null) ?: return null
         return SessionSummary(
             sessionId = sessionId,
+            parkingId = prefs.getString(PARKING_ID, null) ?: return null,
+            vehicleId = prefs.getString(VEHICLE_ID, null),
             parkingName = prefs.getString(PARKING_NAME, null) ?: return null,
             parkingAddress = prefs.getString(PARKING_ADDRESS, "").orEmpty(),
             vehicleType = prefs.getString(VEHICLE_TYPE, "car").orEmpty(),
@@ -42,6 +46,8 @@ class SessionSummaryStore(context: Context) {
 
     private companion object {
         const val SESSION_ID = "session_id"
+        const val PARKING_ID = "parking_id"
+        const val VEHICLE_ID = "vehicle_id"
         const val PARKING_NAME = "parking_name"
         const val PARKING_ADDRESS = "parking_address"
         const val VEHICLE_TYPE = "vehicle_type"
