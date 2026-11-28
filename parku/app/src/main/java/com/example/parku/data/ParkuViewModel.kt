@@ -197,6 +197,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
                 val now = System.currentTimeMillis()
                 var failed = false
+                val previous = comparison
 
                 comparison = comparison.map { item ->
                     reused[item.parking.id]?.let { return@map it }
@@ -224,7 +225,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 comparisonRefreshFailed = failed
-                persistComparison()
+                // Si todo salio de la cache, la seleccion quedo igual y no hay nada que guardar.
+                if (comparison != previous) persistComparison()
             } finally {
                 comparisonRefreshing = false
                 if (comparisonRefreshPending) {
