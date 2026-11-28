@@ -36,7 +36,6 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     private val summaryStore = SessionSummaryStore(application)
     private val catalog = ParkingCatalog(application)
     private val comparisonStore = ComparisonStore(application)
-    private val locationStore = LastLocationStore(application)
     private val connectivity = ConnectivityObserver(application)
     private val syncMutex = Mutex()
     private val comparisonWriteMutex = Mutex()
@@ -197,6 +196,9 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     var locationNotice by mutableStateOf<String?>(null)
         private set
+
+    /** Correccion Sprint 3: ultima ubicacion, cifrada en el almacenamiento interno. */
+    private val locationStore = LastLocationStore(application)
 
     /** Hora de la ubicacion guardada que se esta usando; 0 si la ubicacion es la actual. */
     var savedLocationAt by mutableStateOf(0L)
