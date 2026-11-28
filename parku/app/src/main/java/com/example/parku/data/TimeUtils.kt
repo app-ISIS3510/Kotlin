@@ -1,5 +1,6 @@
 package com.example.parku.data
 
+import android.os.Trace
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -39,6 +40,15 @@ fun pickupLabelToIso(label: String): String {
 
 /** Lee la marca de tiempo que devuelve Supabase, con o sin fraccion de segundo. */
 private fun parseIso(iso: String): Date? {
+    Trace.beginSection("parseIso")
+    try {
+        return parseIsoUntraced(iso)
+    } finally {
+        Trace.endSection()
+    }
+}
+
+private fun parseIsoUntraced(iso: String): Date? {
     val patterns = listOf(
         "yyyy-MM-dd'T'HH:mm:ss'Z'",
         "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX",
