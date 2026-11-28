@@ -18,6 +18,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.example.parku.data.local.BudgetPlan
+import com.example.parku.data.local.BudgetPlanStore
 import com.example.parku.data.local.ComparisonStore
 import com.example.parku.data.local.ParkingCatalog
 import kotlinx.serialization.json.JsonObject
@@ -35,9 +37,41 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     private val summaryStore = SessionSummaryStore(application)
     private val catalog = ParkingCatalog(application)
     private val comparisonStore = ComparisonStore(application)
+    private val budgetStore = BudgetPlanStore(application)
     private val connectivity = ConnectivityObserver(application)
     private val syncMutex = Mutex()
     private val comparisonWriteMutex = Mutex()
+    private val budgetWriteMutex = Mutex()
+
+    // --- Sprint 4: Parking Budget Planner ----------------------------------
+
+    /** Ultimo plan guardado de la cuenta; null si nunca ha planeado nada. */
+    var budgetPlan by mutableStateOf<BudgetPlan?>(null)
+        private set
+
+    /** false mientras se lee SQLite, para no pintar el formulario vacio y luego llenarlo. */
+    var budgetPlanLoaded by mutableStateOf(false)
+        private set
+
+    fun loadBudgetPlan() {
+        budgetPlanLoaded = false
+        viewModelScope.launch {
+            budgetPlan = AuthRepository.currentUserId()?.let { budgetStore.read(it) }
+            budgetPlanLoaded = true
+        }
+    }
+
+    /**
+     * Se guarda en SQLite (Dispatchers.IO dentro del store). El candado evita que dos
+     * cambios seguidos se escriban al reves y quede guardado el viejo.
+     */
+    fun saveBudgetPlan(durationMinutes: Int, budget: Long?) {
+        val uid = AuthRepository.currentUserId() ?: return
+        budgetPlan = BudgetPlan(durationMinutes, budget, System.currentTimeMillis())
+        viewModelScope.launch {
+            budgetWriteMutex.withLock { budgetStore.write(uid, durationMinutes, budget) }
+        }
+    }
 
     /** Estado de la red, para el aviso de "sin conexion". */
     var isOnline by mutableStateOf(connectivity.online.value)
@@ -388,6 +422,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             activeSession = null
             activeParking = null
             comparison = emptyList()
+            // El plan sigue en SQLite para cuando esta cuenta vuelva; solo se olvida en memoria.
+            budgetPlan = null
             comparisonRefreshing = false
             comparisonRefreshFailed = false
         }
