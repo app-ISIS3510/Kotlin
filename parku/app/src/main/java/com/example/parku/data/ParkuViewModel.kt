@@ -152,11 +152,30 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     var comparison by mutableStateOf<List<ComparedParking>>(emptyList())
         private set
 
+    /**
+     * Los parqueaderos que se estan comparando se releen cada vez que se entra a la
+     * tabla. Dentro del minuto siguiente se reusa lo que ya esta en memoria en vez de
+     * volver a preguntar; al llenarse sale el que menos se haya consultado.
+     */
+    private val comparisonCache = LfuCache<String, ComparedParking>(
+        capacity = COMPARISON_CACHE_CAPACITY,
+        lifetimeMillis = COMPARISON_CACHE_LIFETIME_MS,
+    )
+
     var comparisonRefreshing by mutableStateOf(false)
         private set
 
     var comparisonRefreshFailed by mutableStateOf(false)
         private set
+
+    /** Un refresco pedido mientras otro corre no se pierde: se lanza al terminar. */
+    private var comparisonRefreshPending = false
+
+    /** Al quedarse sin red lo que haya en memoria deja de servir. */
+    private var comparisonStale = false
+
+    /** Sube al perder la red, para no aplicar lo que llegue tarde de un refresco viejo. */
+    private var comparisonConnectionVersion = 0
 
     val comparisonHasCapacity: Boolean
         get() = comparison.size < COMPARISON_MAX_SELECTION
@@ -188,6 +207,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         val updated = comparison.filterNot { it.parking.id == parkingId }
         if (updated.size == comparison.size) return
 
+        comparisonCache.remove(parkingId)
+
         comparison = updated
         persistComparison()
     }
@@ -204,16 +225,34 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun refreshComparison() {
-        if (!isOnline || comparison.isEmpty() || comparisonRefreshing) return
+    /** @param force para el boton de refrescar: no reusa nada de memoria. */
+    fun refreshComparison(force: Boolean = false) {
+        if (!isOnline || comparison.isEmpty()) return
+        if (comparisonRefreshing) {
+            comparisonRefreshPending = true
+            return
+        }
+
+        val version = comparisonConnectionVersion
+        // Despues de un corte no se reusa nada: la disponibilidad pudo cambiar mientras tanto.
+        val reuseAllowed = !force && !comparisonStale
+        comparisonStale = false
 
         viewModelScope.launch {
             comparisonRefreshing = true
             comparisonRefreshFailed = false
 
             try {
+                val reused = if (!reuseAllowed) emptyMap() else comparison.mapNotNull { item ->
+                    val hit = comparisonCache.get(item.parking.id) ?: return@mapNotNull null
+                    // Nunca retroceder a una copia mas vieja que la que ya se ve.
+                    if ((hit.updatedAt ?: 0L) < (item.updatedAt ?: 0L)) return@mapNotNull null
+                    item.parking.id to hit
+                }.toMap()
+
                 val loaded = comparison
                     .map { it.parking.id }
+                    .filterNot { it in reused }
                     .map { id ->
                         async(Dispatchers.IO) {
                             id to runCatching { ParkingRepository.getParkingById(id) }
@@ -222,28 +261,45 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                     .map { it.await() }
                     .toMap()
 
+                // Si la red se cayo mientras tanto, lo que llego ya no describe el estado actual.
+                if (version != comparisonConnectionVersion) return@launch
+
                 val now = System.currentTimeMillis()
                 var failed = false
 
                 comparison = comparison.map { item ->
+                    reused[item.parking.id]?.let { return@map it }
+
                     val result = loaded[item.parking.id] ?: return@map item
                     if (result.isFailure) {
                         failed = true
+                        comparisonCache.remove(item.parking.id)
                         return@map item.copy(isFromCache = true)
                     }
 
                     val fresh = result.getOrNull()
-                    ComparedParking(
+                    val updated = ComparedParking(
                         parking = fresh ?: item.parking,
                         updatedAt = now,
                         isUnavailable = fresh == null,
                     )
+                    // Un parqueadero que ya no existe no se guarda.
+                    if (fresh == null) {
+                        comparisonCache.remove(item.parking.id)
+                    } else {
+                        comparisonCache.put(item.parking.id, updated)
+                    }
+                    updated
                 }
 
                 comparisonRefreshFailed = failed
                 persistComparison()
             } finally {
                 comparisonRefreshing = false
+                if (comparisonRefreshPending) {
+                    comparisonRefreshPending = false
+                    refreshComparison(force = true)
+                }
             }
         }
     }
@@ -475,6 +531,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             comparison = emptyList()
             // El plan sigue en SQLite para cuando esta cuenta vuelva; solo se olvida en memoria.
             budgetPlan = null
+            comparisonCache.clear()
             comparisonRefreshing = false
             comparisonRefreshFailed = false
         }
@@ -1169,6 +1226,11 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             var wasOnline = connectivity.online.value
             connectivity.online.collect { online ->
                 isOnline = online
+                if (!online) {
+                    comparisonConnectionVersion++
+                    comparisonStale = true
+                    comparisonRefreshPending = false
+                }
                 if (online && !wasOnline) {
                     syncPending()
                     refresh(silent = true)

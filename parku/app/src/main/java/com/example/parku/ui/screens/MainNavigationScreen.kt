@@ -456,7 +456,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         isOnline = viewModel.isOnline,
                         refreshing = viewModel.comparisonRefreshing,
                         refreshFailed = viewModel.comparisonRefreshFailed,
-                        onRefresh = { viewModel.refreshComparison() },
+                        onRefresh = { viewModel.refreshComparison(force = true) },
                         onRemove = { id -> viewModel.removeFromComparison(id) },
                         onOpenDetails = { parking ->
                             push(Overlay.Details(parking, EntryPoint.COMPARE))
