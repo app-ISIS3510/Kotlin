@@ -30,6 +30,7 @@ import com.example.parku.ui.components.ScreenHeader
 import com.example.parku.ui.components.StatNumber
 import com.example.parku.ui.theme.AppColors
 import com.example.parku.ui.theme.Inter
+import java.util.Locale
 
 /**
  * Espejo de lib/screens/analytics_dashboard.dart. Las seis vistas ya vienen
@@ -284,6 +285,23 @@ private fun DashboardContent(data: DashboardData) {
                     "${actionLabel(it.action)} · ${it.failurePct}% of ${it.attempts} · " +
                         "${it.connectivityFailures} offline",
                     it.failures,
+                )
+            },
+        )
+    }
+
+    Spacer(Modifier.height(18.dp))
+
+    DashboardCard(
+        title = "BQ17 · Session length and cost by parking lot",
+        subtitle = "Last 7 days · average minutes and average cost per completed session",
+    ) {
+        RankedList(
+            data = data.sessionDurationCost.map {
+                BarDatum(
+                    "${it.parkingName} · COP ${String.format(Locale.US, "%,.0f", it.avgCost)} avg · " +
+                        "longest ${it.longestMinutes} min · ${it.completedSessions} sessions",
+                    it.avgMinutes,
                 )
             },
         )
