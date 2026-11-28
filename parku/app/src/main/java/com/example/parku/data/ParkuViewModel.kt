@@ -9,7 +9,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -58,6 +64,46 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             budgetPlan = AuthRepository.currentUserId()?.let { budgetStore.read(it) }
             budgetPlanLoaded = true
+        }
+    }
+
+    /**
+     * Precio por minuto para el planner como un Flow: primero emite el guardado en la
+     * cache de Room (sirve sin red) y despues, si hay conexion, el del servidor.
+     * flatMapLatest sobre la conectividad hace que, si la red vuelve con la pantalla
+     * abierta, se pida de nuevo el precio actual. flowOn(Dispatchers.IO) deja las dos
+     * lecturas fuera del hilo principal, y como la pantalla lo recolecta, se cancela
+     * solo al salir de ella.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun budgetRate(parkingId: String): Flow<BudgetRate> =
+        connectivity.online
+            .flatMapLatest { online -> budgetRateUpdates(parkingId, online) }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.IO)
+
+    private fun budgetRateUpdates(parkingId: String, online: Boolean): Flow<BudgetRate> = flow {
+        val saved = catalog.cachedRate(parkingId)
+        if (saved != null) emit(BudgetRate.Available(saved.pricePerMinute, saved.cachedAt))
+
+        val fresh = if (online) {
+            try {
+                ParkingRepository.getParkingById(parkingId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                null
+            }
+        } else {
+            null
+        }
+
+        if (fresh != null) {
+            // Se guarda para que el precio siga disponible si despues se pierde la red.
+            catalog.saveParking(fresh)
+            parkingMemoryCache.put(fresh.id, fresh)
+            emit(BudgetRate.Available(fresh.pricePerMinute, savedAt = null))
+        } else if (saved == null) {
+            emit(BudgetRate.Unavailable)
         }
     }
 

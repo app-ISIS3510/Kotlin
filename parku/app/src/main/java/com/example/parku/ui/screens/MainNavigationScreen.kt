@@ -46,6 +46,8 @@ import com.example.parku.data.LocationProvider
 import com.example.parku.data.NavigationLinks
 import com.example.parku.data.ParkuViewModel
 import com.example.parku.data.digitsOnly
+import com.example.parku.data.BudgetRate
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.parku.data.generateAvailableTimes
 import com.example.parku.data.isoToPickupLabel
 import kotlinx.coroutines.delay
@@ -492,9 +494,15 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         viewModel.saveBudgetPlan(total, budget.toLongOrNull())
                     }
 
+                    // Se recolecta solo mientras la pantalla esta visible; al salir se cancela.
+                    val rateFlow = remember(current.parking.id) {
+                        viewModel.budgetRate(current.parking.id)
+                    }
+                    val rate by rateFlow.collectAsStateWithLifecycle(BudgetRate.Loading)
+
                     ParkingBudgetScreen(
                         parking = current.parking,
-                        pricePerMinute = current.parking.pricePerMinute,
+                        rate = rate,
                         hours = hours,
                         minutes = minutes,
                         budget = budget,
