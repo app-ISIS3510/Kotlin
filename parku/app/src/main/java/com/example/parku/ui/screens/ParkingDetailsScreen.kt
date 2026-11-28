@@ -49,6 +49,7 @@ fun ParkingDetailsScreen(
     preferredNavApp: String?,
     onToggleFavorite: () -> Unit,
     onParkHere: () -> Unit,
+    onPlanBudget: () -> Unit,
     onWaze: () -> Unit,
     onGoogleMaps: () -> Unit,
     onNavTap: (Int) -> Unit,
@@ -214,6 +215,16 @@ fun ParkingDetailsScreen(
             PickupButton(
                 text = "Park here",
                 onPressed = onParkHere,
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // Sprint 4: estimar el costo de la estadia antes de parquear.
+            PickupButton(
+                text = "Plan your budget",
+                background = AppColors.lightPurple,
+                foreground = AppColors.primary,
+                onPressed = onPlanBudget,
             )
 
             Spacer(Modifier.height(12.dp))
