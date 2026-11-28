@@ -4,6 +4,8 @@ import java.util.Locale
 
 data class SessionSummary(
     val sessionId: String,
+    val parkingId: String,
+    val vehicleId: String? = null,
     val parkingName: String,
     val parkingAddress: String,
     val vehicleType: String,
@@ -29,6 +31,8 @@ fun buildSessionSummary(session: ParkingSession, parking: Parking?, endedAt: Str
     val minutes = minutesBetween(session.startedAt, endedAt)
     return SessionSummary(
         sessionId = session.id,
+        parkingId = session.parkingId,
+        vehicleId = session.vehicleId,
         parkingName = parking?.name ?: "Parking lot",
         parkingAddress = parking?.address.orEmpty(),
         vehicleType = session.vehicleType,

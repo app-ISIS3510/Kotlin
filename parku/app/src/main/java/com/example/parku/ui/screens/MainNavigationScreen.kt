@@ -532,8 +532,10 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     if (summary == null) {
                         LaunchedEffect(Unit) { closeAll() }
                     } else {
+                        LaunchedEffect(summary.sessionId, viewModel.isOnline) { viewModel.refreshLastSummary() }
                         SessionSummaryScreen(
                             summary = summary,
+                            offline = !viewModel.isOnline,
                             currentIndex = 3,
                             onDone = {
                                 closeAll()
@@ -668,6 +670,8 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     onEditProfile = { push(Overlay.EditProfile) },
                     onMyVehicles = { push(Overlay.Vehicles()) },
                     onMyParking = { push(Overlay.MyParking) },
+                    hasLastSummary = viewModel.lastSummary != null,
+                    onLastSummary = { push(Overlay.SessionSummary) },
                     onMyFavorites = { changePage(2) },
                     // El dashboard es el informe compartido de Data Studio (igual que en Flutter).
                     onAnalyticsDashboard = {
