@@ -3,6 +3,8 @@ package com.example.parku.data.local
 import android.content.Context
 import com.example.parku.data.Parking
 
+data class CachedRate(val pricePerMinute: Double, val cachedAt: Long)
+
 class ParkingCatalog(context: Context) {
 
     private val dao = ParkuDatabase.get(context).parkingDao()
@@ -13,6 +15,12 @@ class ParkingCatalog(context: Context) {
         dao.replaceCatalog(lots.map { it.toEntity() })
 
     suspend fun parkingById(id: String): Parking? = dao.byId(id)?.toModel()
+
+    /** Precio por minuto guardado y cuando se guardo; null si el parqueadero no esta en cache. */
+    suspend fun cachedRate(id: String): CachedRate? =
+        dao.byId(id)?.let { CachedRate(it.pricePerMinute, it.cachedAt) }
+
+    suspend fun saveParking(parking: Parking) = dao.upsert(parking.toEntity())
 
     suspend fun search(query: String): List<Parking> {
         val trimmed = query.trim()

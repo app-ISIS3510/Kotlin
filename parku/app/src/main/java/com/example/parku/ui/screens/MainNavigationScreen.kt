@@ -46,6 +46,8 @@ import com.example.parku.data.LocationProvider
 import com.example.parku.data.NavigationLinks
 import com.example.parku.data.ParkuViewModel
 import com.example.parku.data.digitsOnly
+import com.example.parku.data.BudgetRate
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.parku.data.generateAvailableTimes
 import com.example.parku.data.isoToPickupLabel
 import kotlinx.coroutines.delay
@@ -53,6 +55,9 @@ import kotlinx.coroutines.launch
 
 /** Cada cuanto se relee el backend mientras la app esta en pantalla. */
 private const val REFRESH_INTERVAL_MS = 5_000L
+
+/** Espera tras la ultima tecla antes de guardar el plan del presupuesto. */
+private const val BUDGET_SAVE_DELAY_MS = 400L
 
 /**
  * Equivale a las rutas que en Flutter se abren con Navigator.push
@@ -464,10 +469,40 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                     var hours by rememberSaveable { mutableStateOf("") }
                     var minutes by rememberSaveable { mutableStateOf("") }
                     var budget by rememberSaveable { mutableStateOf("") }
+                    var restored by rememberSaveable { mutableStateOf(false) }
+
+                    // Al abrir se lee de SQLite el ultimo plan de esta cuenta.
+                    LaunchedEffect(Unit) {
+                        if (!restored) viewModel.loadBudgetPlan()
+                    }
+                    LaunchedEffect(viewModel.budgetPlanLoaded) {
+                        if (restored || !viewModel.budgetPlanLoaded) return@LaunchedEffect
+                        viewModel.budgetPlan?.let { plan ->
+                            if (plan.durationMinutes > 0) {
+                                hours = (plan.durationMinutes / 60).toString()
+                                minutes = (plan.durationMinutes % 60).toString()
+                            }
+                            budget = plan.budget?.toString().orEmpty()
+                        }
+                        restored = true
+                    }
+                    // Se guarda cuando la persona deja de escribir; cada tecla reinicia la espera.
+                    LaunchedEffect(hours, minutes, budget, restored) {
+                        if (!restored) return@LaunchedEffect
+                        delay(BUDGET_SAVE_DELAY_MS)
+                        val total = (hours.toIntOrNull() ?: 0) * 60 + (minutes.toIntOrNull() ?: 0)
+                        viewModel.saveBudgetPlan(total, budget.toLongOrNull())
+                    }
+
+                    // Se recolecta solo mientras la pantalla esta visible; al salir se cancela.
+                    val rateFlow = remember(current.parking.id) {
+                        viewModel.budgetRate(current.parking.id)
+                    }
+                    val rate by rateFlow.collectAsStateWithLifecycle(BudgetRate.Loading)
 
                     ParkingBudgetScreen(
                         parking = current.parking,
-                        pricePerMinute = current.parking.pricePerMinute,
+                        rate = rate,
                         hours = hours,
                         minutes = minutes,
                         budget = budget,

@@ -11,6 +11,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -21,12 +26,19 @@ import kotlinx.coroutines.withTimeoutOrNull
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.example.parku.data.local.BudgetPlan
+import com.example.parku.data.local.BudgetPlanStore
 import com.example.parku.data.local.ComparisonStore
 import com.example.parku.data.local.ParkingCatalog
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.UUID
+
+/** Acciones que mide la BQ18. Mismos valores que usa la vista en Supabase. */
+private const val ACTION_START_PARKING = "start_parking"
+private const val ACTION_CHANGE_PICKUP = "change_pickup_time"
+private const val ACTION_END_PARKING = "end_parking"
 
 /**
  * Unico dueno del estado de la app. Sustituye a los datos de ejemplo que antes
@@ -38,9 +50,81 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     private val summaryStore = SessionSummaryStore(application)
     private val catalog = ParkingCatalog(application)
     private val comparisonStore = ComparisonStore(application)
+    private val budgetStore = BudgetPlanStore(application)
     private val connectivity = ConnectivityObserver(application)
     private val syncMutex = Mutex()
     private val comparisonWriteMutex = Mutex()
+    private val budgetWriteMutex = Mutex()
+
+    // --- Sprint 4: Parking Budget Planner ----------------------------------
+
+    /** Ultimo plan guardado de la cuenta; null si nunca ha planeado nada. */
+    var budgetPlan by mutableStateOf<BudgetPlan?>(null)
+        private set
+
+    /** false mientras se lee SQLite, para no pintar el formulario vacio y luego llenarlo. */
+    var budgetPlanLoaded by mutableStateOf(false)
+        private set
+
+    fun loadBudgetPlan() {
+        budgetPlanLoaded = false
+        viewModelScope.launch {
+            budgetPlan = AuthRepository.currentUserId()?.let { budgetStore.read(it) }
+            budgetPlanLoaded = true
+        }
+    }
+
+    /**
+     * Precio por minuto para el planner como un Flow: primero emite el guardado en la
+     * cache de Room (sirve sin red) y despues, si hay conexion, el del servidor.
+     * flatMapLatest sobre la conectividad hace que, si la red vuelve con la pantalla
+     * abierta, se pida de nuevo el precio actual. flowOn(Dispatchers.IO) deja las dos
+     * lecturas fuera del hilo principal, y como la pantalla lo recolecta, se cancela
+     * solo al salir de ella.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun budgetRate(parkingId: String): Flow<BudgetRate> =
+        connectivity.online
+            .flatMapLatest { online -> budgetRateUpdates(parkingId, online) }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.IO)
+
+    private fun budgetRateUpdates(parkingId: String, online: Boolean): Flow<BudgetRate> = flow {
+        val saved = catalog.cachedRate(parkingId)
+        if (saved != null) emit(BudgetRate.Available(saved.pricePerMinute, saved.cachedAt))
+
+        val fresh = if (online) {
+            try {
+                ParkingRepository.getParkingById(parkingId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                null
+            }
+        } else {
+            null
+        }
+
+        if (fresh != null) {
+            // Se guarda para que el precio siga disponible si despues se pierde la red.
+            catalog.saveParking(fresh)
+            parkingMemoryCache.put(fresh.id, fresh)
+            emit(BudgetRate.Available(fresh.pricePerMinute, savedAt = null))
+        } else if (saved == null) {
+            emit(BudgetRate.Unavailable)
+        }
+    }
+
+    /**
+     * Se guarda en SQLite (Dispatchers.IO dentro del store). El candado evita que dos
+     * cambios seguidos se escriban al reves y quede guardado el viejo.
+     */
+    fun saveBudgetPlan(durationMinutes: Int, budget: Long?) {
+        val uid = AuthRepository.currentUserId() ?: return
+        budgetPlan = BudgetPlan(durationMinutes, budget, System.currentTimeMillis())
+        viewModelScope.launch {
+            budgetWriteMutex.withLock { budgetStore.write(uid, durationMinutes, budget) }
+        }
+    }
 
     /** Estado de la red, para el aviso de "sin conexion". */
     var isOnline by mutableStateOf(connectivity.online.value)
@@ -460,6 +544,8 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             activeSession = null
             activeParking = null
             comparison = emptyList()
+            // El plan sigue en SQLite para cuando esta cuenta vuelva; solo se olvida en memoria.
+            budgetPlan = null
             comparisonCache.clear()
             comparisonRefreshing = false
             comparisonRefreshFailed = false
@@ -790,7 +876,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         // La disponibilidad se valida en el servidor (RPC), asi que aqui si hace falta red.
-        if (!requireConnection("start a parking session")) return
+        if (!requireConnection("start a parking session")) {
+            trackActionResult(ACTION_START_PARKING, "pickup_time", parking.id, offline = true)
+            return
+        }
 
         viewModelScope.launch {
             try {
@@ -828,9 +917,11 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                         put("pickup_selection", if (usedSuggestedTime) "suggested" else "manual")
                     },
                 )
+                trackActionResult(ACTION_START_PARKING, "pickup_time", parking.id)
                 onDone()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                trackActionResult(ACTION_START_PARKING, "pickup_time", parking.id, error = e)
                 // La pantalla conserva la seleccion (no se llama a onDone) para poder reintentar.
                 errorMessage = if (isNetworkFailure(e)) {
                     "Connection lost. Your parking session is not confirmed. Please try again."
@@ -845,7 +936,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         val session = activeSession ?: return
         // Sin red no se llama a onDone: la pantalla se queda con la hora elegida
         // y no se afirma que el servidor la acepto.
-        if (!requireConnection("change the pickup time")) return
+        if (!requireConnection("change the pickup time")) {
+            trackActionResult(ACTION_CHANGE_PICKUP, "change_pickup_time", session.parkingId, offline = true)
+            return
+        }
 
         viewModelScope.launch {
             try {
@@ -861,9 +955,16 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                     screen = "change_pickup_time",
                     parkingId = session.parkingId,
                 )
+                trackActionResult(ACTION_CHANGE_PICKUP, "change_pickup_time", session.parkingId)
                 onDone()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                trackActionResult(
+                    ACTION_CHANGE_PICKUP,
+                    "change_pickup_time",
+                    session.parkingId,
+                    error = e,
+                )
                 errorMessage = if (isNetworkFailure(e)) {
                     "Connection lost. Your new pickup time was not saved."
                 } else {
@@ -882,7 +983,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     fun endParking(onDone: () -> Unit = {}) {
         val session = activeSession ?: return
         // La sesion sigue activa hasta que el servidor confirme que termino.
-        if (!requireConnection("end your parking session")) return
+        if (!requireConnection("end your parking session")) {
+            trackActionResult(ACTION_END_PARKING, "end_parking", session.parkingId, offline = true)
+            return
+        }
 
         viewModelScope.launch {
             endingParking = true
@@ -890,6 +994,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 val endedAt = nowIso()
                 withContext(Dispatchers.IO) { SessionRepository.endSession(session.id, endedAt) }
                 track("parking_ended", screen = "end_parking", parkingId = session.parkingId)
+                trackActionResult(ACTION_END_PARKING, "end_parking", session.parkingId)
                 val summary = buildSessionSummary(session, activeParking, endedAt)
                 lastSummary = summary
                 summaryStore.save(summary)
@@ -899,6 +1004,7 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 onDone()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                trackActionResult(ACTION_END_PARKING, "end_parking", session.parkingId, error = e)
                 errorMessage = if (isNetworkFailure(e)) {
                     "Connection lost. Your session is still active until the server confirms it ended."
                 } else {
@@ -908,6 +1014,41 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                 endingParking = false
             }
         }
+    }
+
+    /**
+     * Sprint 4, BQ18: cada intento de iniciar parqueo, cambiar la hora de recogida o
+     * terminar el parqueo deja un evento con su resultado. Las fallas se separan entre
+     * conectividad (sin red al intentar o IOException) y cualquier otro error, para
+     * saber si mejorar el manejo offline o arreglar la operacion. Sin red el evento
+     * queda en la cola y se envia al volver la conexion, con su hora real.
+     */
+    private fun trackActionResult(
+        action: String,
+        screen: String,
+        parkingId: String?,
+        offline: Boolean = false,
+        error: Throwable? = null,
+    ) {
+        val failed = offline || error != null
+        val reason = when {
+            !failed -> null
+            offline || (error != null && isNetworkFailure(error)) -> "connectivity"
+            else -> "other"
+        }
+        track(
+            "parking_action_result",
+            screen = screen,
+            parkingId = parkingId,
+            metadata = buildJsonObject {
+                put("platform", "kotlin")
+                put("action", action)
+                put("outcome", if (failed) "failure" else "success")
+                if (reason != null) put("failure_reason", reason)
+                // Solo el tipo de error, nunca el mensaje: puede traer datos de la persona.
+                if (error != null) put("error_type", error::class.java.simpleName)
+            },
+        )
     }
 
     fun trackDetailViewed(parkingId: String, entryPoint: EntryPoint) {

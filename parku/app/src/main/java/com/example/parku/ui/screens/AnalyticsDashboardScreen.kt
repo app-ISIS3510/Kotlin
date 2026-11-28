@@ -152,6 +152,13 @@ private fun entryPointLabel(entryPoint: String): String = when (entryPoint) {
     else -> entryPoint
 }
 
+private fun actionLabel(action: String): String = when (action) {
+    "start_parking" -> "Start parking"
+    "change_pickup_time" -> "Change pickup"
+    "end_parking" -> "End parking"
+    else -> action
+}
+
 private fun screenLabel(screen: String): String = when (screen) {
     "parking_list" -> "Parking list"
     "vehicles" -> "Vehicles"
@@ -260,6 +267,23 @@ private fun DashboardContent(data: DashboardData) {
                 BarDatum(
                     "${entryPointLabel(it.entryPoint)} · ${it.conversionPct}% parked",
                     it.parkingStarts,
+                )
+            },
+        )
+    }
+
+    Spacer(Modifier.height(18.dp))
+
+    DashboardCard(
+        title = "BQ18 · Failed parking actions",
+        subtitle = "Last 7 days · failed attempts, % of attempts and how many were offline",
+    ) {
+        RankedList(
+            data = data.actionFailures.map {
+                BarDatum(
+                    "${actionLabel(it.action)} · ${it.failurePct}% of ${it.attempts} · " +
+                        "${it.connectivityFailures} offline",
+                    it.failures,
                 )
             },
         )

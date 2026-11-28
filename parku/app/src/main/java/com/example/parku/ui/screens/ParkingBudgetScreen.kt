@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.parku.data.BUDGET_MAX_MINUTES
 import com.example.parku.data.BudgetEstimate
+import com.example.parku.data.BudgetRate
 import com.example.parku.data.Parking
 import com.example.parku.data.estimateBudget
 import com.example.parku.data.formatCop
@@ -44,7 +45,7 @@ private val OverBudget = Color(0xFFC0392B)
 @Composable
 fun ParkingBudgetScreen(
     parking: Parking,
-    pricePerMinute: Double,
+    rate: BudgetRate,
     hours: String,
     minutes: String,
     budget: String,
@@ -55,7 +56,10 @@ fun ParkingBudgetScreen(
     onBack: () -> Unit,
 ) {
     val totalMinutes = (hours.toIntOrNull() ?: 0) * 60 + (minutes.toIntOrNull() ?: 0)
-    val estimate = estimateBudget(pricePerMinute, totalMinutes, budget.toLongOrNull())
+    val available = rate as? BudgetRate.Available
+    val estimate = available?.let {
+        estimateBudget(it.pricePerMinute, totalMinutes, budget.toLongOrNull())
+    }
 
     Column(
         modifier = Modifier
@@ -101,12 +105,29 @@ fun ParkingBudgetScreen(
                 Spacer(Modifier.height(12.dp))
 
                 Text(
-                    text = "Rate: ${formatCop(pricePerMinute)} per minute",
+                    text = when (rate) {
+                        is BudgetRate.Available -> "Rate: ${formatCop(rate.pricePerMinute)} per minute"
+                        BudgetRate.Loading -> "Loading rate..."
+                        BudgetRate.Unavailable -> "Rate not available"
+                    },
                     fontFamily = Inter,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.W600,
                     color = AppColors.darkText,
                 )
+
+                // Conectividad eventual: si el precio viene de la cache se dice desde cuando.
+                if (available?.savedAt != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Based on saved data from ${formatSavedAt(available.savedAt)}. " +
+                            "The rate may have changed.",
+                        fontFamily = Inter,
+                        fontSize = 13.sp,
+                        lineHeight = 17.55.sp,
+                        color = AppColors.greyText,
+                    )
+                }
             }
 
             Spacer(Modifier.height(22.dp))
@@ -167,7 +188,7 @@ fun ParkingBudgetScreen(
 
             Spacer(Modifier.height(22.dp))
 
-            EstimateCard(estimate)
+            EstimateCard(estimate, rate)
 
             Spacer(Modifier.height(14.dp))
 
@@ -186,7 +207,7 @@ fun ParkingBudgetScreen(
 }
 
 @Composable
-private fun EstimateCard(estimate: BudgetEstimate?) {
+private fun EstimateCard(estimate: BudgetEstimate?, rate: BudgetRate) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -196,7 +217,14 @@ private fun EstimateCard(estimate: BudgetEstimate?) {
     ) {
         if (estimate == null) {
             Text(
-                text = "Enter how long you plan to stay to see the estimated total.",
+                text = when (rate) {
+                    BudgetRate.Unavailable ->
+                        "Estimate unavailable. This parking lot's rate isn't saved on this " +
+                            "device yet. Connect to the internet to load it."
+                    BudgetRate.Loading -> "Loading the parking rate..."
+                    is BudgetRate.Available ->
+                        "Enter how long you plan to stay to see the estimated total."
+                },
                 fontFamily = Inter,
                 fontSize = 15.sp,
                 lineHeight = 20.sp,
@@ -226,7 +254,8 @@ private fun EstimateCard(estimate: BudgetEstimate?) {
         Spacer(Modifier.height(6.dp))
 
         Text(
-            text = formatCop(estimate.total),
+            text = (if (rate is BudgetRate.Available && rate.isFromCache) "≈ " else "") +
+                formatCop(estimate.total),
             fontFamily = Inter,
             fontSize = 28.sp,
             fontWeight = FontWeight.W700,
@@ -259,3 +288,7 @@ private fun EstimateCard(estimate: BudgetEstimate?) {
         }
     }
 }
+
+private fun formatSavedAt(millis: Long): String =
+    java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(millis))

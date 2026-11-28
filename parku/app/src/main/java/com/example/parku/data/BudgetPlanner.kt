@@ -39,6 +39,23 @@ fun estimateBudget(pricePerMinute: Double, minutes: Int, budget: Long?): BudgetE
     )
 }
 
+/** De donde sale el precio por minuto que usa el planner. */
+sealed interface BudgetRate {
+
+    data object Loading : BudgetRate
+
+    /**
+     * @param savedAt cuando se guardo en la cache de Room; null si se acaba de
+     * confirmar con el servidor.
+     */
+    data class Available(val pricePerMinute: Double, val savedAt: Long?) : BudgetRate {
+        val isFromCache: Boolean get() = savedAt != null
+    }
+
+    /** Sin red y sin precio guardado: no hay con que estimar. */
+    data object Unavailable : BudgetRate
+}
+
 /** Mismo formato que SessionSummary.totalLabel: "COP 12,000". */
 fun formatCop(value: Double): String = "COP " + String.format(Locale.US, "%,.0f", value)
 
