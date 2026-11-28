@@ -84,6 +84,33 @@ data class EntryPointConversionRow(
     @SerialName("conversion_pct") val conversionPct: Double = 0.0,
 )
 
+/**
+ * Sprint 4, BQ18: que accion del parqueo falla mas, en que porcentaje de sus intentos
+ * y cuantas de esas fallas fueron por perdida de conectividad.
+ */
+@Serializable
+data class ActionFailureRow(
+    val action: String,
+    val attempts: Int = 0,
+    val failures: Int = 0,
+    @SerialName("connectivity_failures") val connectivityFailures: Int = 0,
+    @SerialName("other_failures") val otherFailures: Int = 0,
+    @SerialName("failure_pct") val failurePct: Double = 0.0,
+)
+
+/**
+ * Sprint 4, BQ17: que parqueaderos tienen la sesion completada mas larga y el mayor
+ * costo promedio por sesion en los ultimos 7 dias.
+ */
+@Serializable
+data class SessionDurationCostRow(
+    @SerialName("parking_name") val parkingName: String,
+    @SerialName("completed_sessions") val completedSessions: Int = 0,
+    @SerialName("avg_minutes") val avgMinutes: Int = 0,
+    @SerialName("longest_minutes") val longestMinutes: Int = 0,
+    @SerialName("avg_cost") val avgCost: Double = 0.0,
+)
+
 /** Todo lo que pinta el dashboard, en una sola carga. */
 @Serializable
 data class DashboardData(
@@ -96,6 +123,8 @@ data class DashboardData(
     val loadTimes: List<LoadTimeRow> = emptyList(),
     val navigationConversion: List<NavigationConversionRow> = emptyList(),
     val entryPointConversion: List<EntryPointConversionRow> = emptyList(),
+    val actionFailures: List<ActionFailureRow> = emptyList(),
+    val sessionDurationCost: List<SessionDurationCostRow> = emptyList(),
 )
 
 object DashboardRepository {
@@ -125,6 +154,16 @@ object DashboardRepository {
             supabase.from("bq15_entry_point_conversion_last_7_days")
                 .select()
                 .decodeList<EntryPointConversionRow>()
+        }.getOrDefault(emptyList()),
+        actionFailures = runCatching {
+            supabase.from("bq18_parking_action_failures_last_7_days")
+                .select()
+                .decodeList<ActionFailureRow>()
+        }.getOrDefault(emptyList()),
+        sessionDurationCost = runCatching {
+            supabase.from("bq17_session_duration_cost_last_7_days")
+                .select()
+                .decodeList<SessionDurationCostRow>()
         }.getOrDefault(emptyList()),
     )
 }
