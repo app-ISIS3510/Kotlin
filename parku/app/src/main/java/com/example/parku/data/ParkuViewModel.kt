@@ -2,6 +2,7 @@ package com.example.parku.data
 
 import android.app.Application
 import android.os.SystemClock
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -329,13 +330,22 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         smartRadiusMeters = meters
     }
 
-    val smartParking: SmartParkingResults
-        get() = smartParkingResults(
+    /**
+     * Micro-optimizacion del Sprint 4: antes era un getter, asi que cada lectura en la
+     * composicion volvia a filtrar, medir distancias y ordenar en el hilo principal,
+     * aunque nada hubiera cambiado (por ejemplo, al agregar un parqueadero a la
+     * comparacion). Con derivedStateOf Compose guarda el ultimo resultado y solo lo
+     * recalcula cuando cambia uno de los estados que lee: los parqueaderos, la
+     * ubicacion, el radio o el tipo de vehiculo.
+     */
+    val smartParking: SmartParkingResults by derivedStateOf {
+        smartParkingResults(
             parkingLots = parkingLots,
             userLocation = userLocation,
             radiusMeters = smartRadiusMeters,
             vehicleType = smartVehicleType,
         )
+    }
 
     var isLoading by mutableStateOf(false)
         private set
