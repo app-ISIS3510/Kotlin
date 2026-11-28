@@ -45,6 +45,7 @@ import com.example.parku.data.EntryPoint
 import com.example.parku.data.LocationProvider
 import com.example.parku.data.NavigationLinks
 import com.example.parku.data.ParkuViewModel
+import com.example.parku.data.digitsOnly
 import com.example.parku.data.generateAvailableTimes
 import com.example.parku.data.isoToPickupLabel
 import kotlinx.coroutines.delay
@@ -85,6 +86,8 @@ private sealed interface Overlay {
     data object Dashboard : Overlay
 
     data object Compare : Overlay
+
+    data class Budget(val parking: Parking) : Overlay
 }
 
 /**
@@ -300,6 +303,7 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         preferredNavApp = viewModel.preferredNavApp,
                         onToggleFavorite = { viewModel.toggleFavorite(parking) },
                         onParkHere = { push(Overlay.Pickup(parking, current.origin)) },
+                        onPlanBudget = { push(Overlay.Budget(parking)) },
                         onWaze = { openNavigation(parking, "Waze", "parking_detail") },
                         onGoogleMaps = { openNavigation(parking, "Google Maps", "parking_detail") },
                         onNavTap = changePageFromOverlay,
@@ -452,6 +456,25 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         onOpenDetails = { parking ->
                             push(Overlay.Details(parking, EntryPoint.COMPARE))
                         },
+                        onBack = { pop() },
+                    )
+                }
+
+                is Overlay.Budget -> {
+                    var hours by rememberSaveable { mutableStateOf("") }
+                    var minutes by rememberSaveable { mutableStateOf("") }
+                    var budget by rememberSaveable { mutableStateOf("") }
+
+                    ParkingBudgetScreen(
+                        parking = current.parking,
+                        pricePerMinute = current.parking.pricePerMinute,
+                        hours = hours,
+                        minutes = minutes,
+                        budget = budget,
+                        onHoursChange = { hours = digitsOnly(it, 2) },
+                        onMinutesChange = { minutes = digitsOnly(it, 2) },
+                        onBudgetChange = { budget = digitsOnly(it, 8) },
+                        onNavTap = changePageFromOverlay,
                         onBack = { pop() },
                     )
                 }
