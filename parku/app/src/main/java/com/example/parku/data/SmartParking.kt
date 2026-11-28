@@ -104,7 +104,27 @@ private fun rank(
     }
 }
 
+/**
+ * Seccion de System Trace para medir la micro-optimizacion del Sprint 4 en el
+ * Android Studio Profiler: cada ejecucion del calculo aparece con este nombre.
+ */
+private const val SMART_PARKING_TRACE = "smartParkingResults"
+
 fun smartParkingResults(
+    parkingLots: List<Parking>,
+    userLocation: Pair<Double, Double>?,
+    radiusMeters: Int,
+    vehicleType: SmartVehicleType,
+): SmartParkingResults {
+    android.os.Trace.beginSection(SMART_PARKING_TRACE)
+    try {
+        return computeSmartParking(parkingLots, userLocation, radiusMeters, vehicleType)
+    } finally {
+        android.os.Trace.endSection()
+    }
+}
+
+private fun computeSmartParking(
     parkingLots: List<Parking>,
     userLocation: Pair<Double, Double>?,
     radiusMeters: Int,
