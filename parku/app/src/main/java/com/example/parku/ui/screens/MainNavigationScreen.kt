@@ -535,7 +535,10 @@ fun MainNavigationScreen(viewModel: ParkuViewModel = viewModel()) {
                         SessionSummaryScreen(
                             summary = summary,
                             currentIndex = 3,
-                            onDone = { closeAll() },
+                            onDone = {
+                                closeAll()
+                                push(Overlay.MyParking)
+                            },
                             onNavTap = changePageFromOverlay,
                         )
                     }
