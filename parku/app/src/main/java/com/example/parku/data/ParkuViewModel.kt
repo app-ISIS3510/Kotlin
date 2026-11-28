@@ -9,11 +9,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.sync.withLock
@@ -82,6 +85,17 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
 
     var comparisonRefreshFailed by mutableStateOf(false)
         private set
+
+    /**
+     * Los parqueaderos de la comparacion se consultan en paralelo, pero con tope: como
+     * mucho dos a la vez, para no quedarse con el hilo de IO que el resto de la app
+     * tambien usa. El dispatcher acota los hilos; el semaforo acota las consultas en
+     * vuelo, que es lo que manda cuando la llamada se suspende esperando al servidor.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val comparisonDispatcher = Dispatchers.IO.limitedParallelism(COMPARISON_MAX_PARALLEL)
+
+    private val comparisonSlots = Semaphore(COMPARISON_MAX_PARALLEL)
 
     /** Un refresco pedido mientras otro corre no se pierde: se lanza al terminar. */
     private var comparisonRefreshPending = false
@@ -169,8 +183,10 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
                     .map { it.parking.id }
                     .filterNot { it in reused }
                     .map { id ->
-                        async(Dispatchers.IO) {
-                            id to runCatching { ParkingRepository.getParkingById(id) }
+                        async(comparisonDispatcher) {
+                            id to comparisonSlots.withPermit {
+                                runCatching { ParkingRepository.getParkingById(id) }
+                            }
                         }
                     }
                     .map { it.await() }

@@ -11,6 +11,8 @@ const val COMPARISON_MAX_SELECTION = 3
 const val COMPARISON_CACHE_CAPACITY = 8
 const val COMPARISON_CACHE_LIFETIME_MS = 60_000L
 
+const val COMPARISON_MAX_PARALLEL = 2
+
 private const val UNAVAILABLE = "Unavailable"
 
 data class ComparedParking(
