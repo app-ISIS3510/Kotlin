@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 import com.example.parku.data.local.BudgetPlan
 import com.example.parku.data.local.BudgetPlanStore
 import com.example.parku.data.local.ComparisonStore
+import com.example.parku.data.local.LastLocationStore
 import com.example.parku.data.local.ParkingCatalog
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -353,15 +354,45 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
     var locationNotice by mutableStateOf<String?>(null)
         private set
 
+    /** Correccion Sprint 3: ultima ubicacion, cifrada en el almacenamiento interno. */
+    private val locationStore = LastLocationStore(application)
+
+    /** Hora de la ubicacion guardada que se esta usando; 0 si la ubicacion es la actual. */
+    var savedLocationAt by mutableStateOf(0L)
+        private set
+
     fun updateUserLocation(location: Pair<Double, Double>?) {
-        userLocation = location
-        updateNearest()
-        locationNotice = if (location == null) {
-            LocationProvider.failureReason(getApplication())
-        } else {
-            null
+        if (location != null) {
+            userLocation = location
+            savedLocationAt = 0L
+            locationNotice = null
+            updateNearest()
+            // Correccion Sprint 3: se guarda cifrada para cuando el GPS no responda.
+            viewModelScope.launch { locationStore.save(location.first, location.second) }
+            return
+        }
+
+        // Sin lectura nueva: se usa la ultima ubicacion guardada en el telefono y se
+        // avisa desde cuando es, para que la persona sepa que las distancias son aproximadas.
+        viewModelScope.launch {
+            val saved = locationStore.read()
+            if (saved == null) {
+                userLocation = null
+                savedLocationAt = 0L
+                locationNotice = LocationProvider.failureReason(getApplication())
+            } else {
+                userLocation = saved.latitude to saved.longitude
+                savedLocationAt = saved.savedAt
+                locationNotice = LocationProvider.failureReason(getApplication()) +
+                    " Using your last saved location from " + formatLocationTime(saved.savedAt) + "."
+            }
+            updateNearest()
         }
     }
+
+    private fun formatLocationTime(millis: Long): String =
+        java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date(millis))
 
     var nearestParkingLots by mutableStateOf<List<Parking>>(emptyList())
         private set
@@ -543,6 +574,9 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
             summaryStore.clear()
             lastSummary = null
             catalog.clear()
+            locationStore.clear()
+            userLocation = null
+            savedLocationAt = 0L
             pendingCount = 0
             isSignedIn = false
             isAdmin = false
@@ -753,6 +787,14 @@ class ParkuViewModel(application: Application) : AndroidViewModel(application) {
         val uid = AuthRepository.currentUserId() ?: return
         comparison = comparisonStore.read(uid).take(COMPARISON_MAX_SELECTION)
         if (store.owner() != uid) return
+
+        // Mientras el GPS responde, las distancias salen de la ultima ubicacion guardada.
+        if (userLocation == null) {
+            locationStore.read()?.let {
+                userLocation = it.latitude to it.longitude
+                savedLocationAt = it.savedAt
+            }
+        }
 
         lastSyncAt = store.lastSyncAt()
         store.profile()?.let {
